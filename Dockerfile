@@ -13,15 +13,24 @@ COPY prisma ./prisma
 COPY tsconfig.json ./
 COPY src ./src
 
-RUN npx prisma generate && npm run build
+RUN npm run build:api
+
+COPY frontend/package*.json ./frontend/
+COPY frontend/vite.config.ts ./frontend/
+COPY frontend/tsconfig*.json ./frontend/
+COPY frontend/index.html ./frontend/
+COPY frontend/src ./frontend/src
+
+RUN cd frontend && npm ci && npm run build
 
 FROM node:20-slim
 
 WORKDIR /app
 
-ENV NODE_ENV=production
-
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production
+ENV DATABASE_URL="file:./data/dev.db"
 
 COPY package*.json ./
 COPY prisma ./prisma
@@ -29,8 +38,7 @@ COPY prisma ./prisma
 RUN npm ci --omit=dev && npx prisma generate
 
 COPY --from=builder /app/dist ./dist
-
-ENV DATABASE_URL="file:./data/dev.db"
+COPY --from=builder /app/frontend/dist ./frontend/dist
 
 RUN mkdir -p /app/data
 

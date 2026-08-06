@@ -117,6 +117,25 @@ mutation {
 }
 ```
 
+## フロントエンド UI
+
+`frontend/` に React + Vite + Apollo Client の管理画面があります。
+
+```bash
+# バックエンドを起動
+cp .env.example .env
+npm run db:migrate
+npm run seed
+npm run dev
+
+# 別ターミナルでフロントエンドを起動
+cd frontend
+npm install
+npm run dev
+```
+
+`npm run build` でバックエンドとフロントエンドを両方ビルドし、`npm start` すると `http://localhost:4000` で UI と GraphQL API の両方が利用できます。
+
 ## Docker
 
 ```bash
@@ -141,6 +160,5 @@ docker compose up --build -d
 
 - 認証・認可（context にユーザー情報を注入）
 - DataLoader による N+1 対策
-- フロントエンド（React + Apollo Client）で管理画面 UI
 - 記事検索・フィルタ・ページネーションの強化
 - 定期 RSS 取得（GitHub Actions / BullMQ / node-cron）
