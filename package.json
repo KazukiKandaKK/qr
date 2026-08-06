@@ -7,8 +7,11 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "prisma generate && tsc",
+    "build": "npm run build:api && npm run build:frontend",
+    "build:api": "prisma generate && tsc",
+    "build:frontend": "cd frontend && npm run build",
     "dev": "prisma generate && tsx watch src/index.ts",
+    "dev:frontend": "cd frontend && npm run dev",
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

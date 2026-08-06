@@ -1,3 +1,4 @@
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import { ApolloServer } from '@apollo/server';
@@ -46,6 +47,11 @@ export async function createApp(): Promise<express.Express> {
       context: async (): Promise<AppContext> => ({ logger, rssService }),
     }),
   );
+
+  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+  });
 
   return app;
 }
