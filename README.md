@@ -117,6 +117,19 @@ mutation {
 }
 ```
 
+## Docker
+
+```bash
+# SQLite 版のイメージをビルドして実行（DB はファイル）
+docker build -t rss-sec-dashboard .
+docker run -p 4000:4000 -e DATABASE_URL="file:./prisma/dev.db" rss-sec-dashboard
+
+# PostgreSQL 版を docker compose で起動
+docker compose up --build -d
+```
+
+`docker compose` では `app` サービスが `db` サービス起動後に `prisma migrate deploy` を実行し、GraphQL サーバーを立ち上げます。
+
 ## 設計のポイント
 
 - **ドメイン分離**: `domain.ts` に型を定義し、Prisma 実装は `repository.ts` で閉じ込めています。
