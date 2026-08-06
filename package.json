@@ -1,0 +1,41 @@
+{
+  "name": "qr-graphql-skeleton",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-ready GraphQL skeleton for the QR sample app",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "prisma generate && tsc",
+    "dev": "prisma generate && tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@apollo/server": "^5.5.1",
+    "@as-integrations/express4": "^1.1.2",
+    "@prisma/client": "^5.17.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "graphql": "^16.14.2",
+    "pino": "^9.3.0",
+    "prisma": "^5.17.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.7"
+  }
+}
