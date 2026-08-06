@@ -120,15 +120,15 @@ mutation {
 ## Docker
 
 ```bash
-# SQLite 版のイメージをビルドして実行（DB はファイル）
+# イメージをビルドして実行（SQLite 版。コンテナ内に DB ファイルを作成）
 docker build -t rss-sec-dashboard .
-docker run -p 4000:4000 -e DATABASE_URL="file:./prisma/dev.db" rss-sec-dashboard
+docker run -p 4000:4000 rss-sec-dashboard
 
-# PostgreSQL 版を docker compose で起動
+# または docker compose で起動
 docker compose up --build -d
 ```
 
-`docker compose` では `app` サービスが `db` サービス起動後に `prisma migrate deploy` を実行し、GraphQL サーバーを立ち上げます。
+`docker run` / `docker compose` では `DATABASE_URL=file:./data/dev.db` が使われ、起動時に `prisma migrate deploy` でテーブルが作成されます。永続化したい場合は `docker compose` の `app_data` ボリュームを使ってください。
 
 ## 設計のポイント
 
