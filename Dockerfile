@@ -30,6 +30,10 @@ RUN npm ci --omit=dev && npx prisma generate
 
 COPY --from=builder /app/dist ./dist
 
+ENV DATABASE_URL="file:./data/dev.db"
+
+RUN mkdir -p /app/data
+
 EXPOSE 4000
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
