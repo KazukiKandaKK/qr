@@ -3,6 +3,10 @@
 情報セキュリティに関する RSS を取得し、GraphQL で管理・閲覧できるダッシュボードの骨組みです。
 `KazukiKandaKK/rss-sec-check` と同じドメインを、GraphQL + Apollo Server + Prisma + SQLite の構成で作り直しています。
 
+## 構成図
+
+![構成図](docs/assets/architecture.png)
+
 ## 技術スタック
 
 | 領域 | 採用技術 |
