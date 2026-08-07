@@ -21,34 +21,40 @@
 
 ## ディレクトリ構成
 
+`backend/` と `frontend/` は互いに依存しない独立した npm パッケージです。バックエンドは GraphQL(HTTP)経由でのみフロントエンドと通信するため、Prisma は `backend/` に閉じています。
+
 ```
 qr/
-├── src/
-│   ├── config/           # 環境変数・ロガー
-│   ├── lib/              # Prisma クライアント・RSS パーサー・デフォルトフィード
-│   ├── graphql/          # GraphQL スキーマ・スカラー
-│   ├── features/         # ドメインモジュール
-│   │   └── rss/          # Feed / Article ドメイン
-│   │       ├── domain.ts
-│   │       ├── schemas.ts
-│   │       ├── repository.ts    # リポジトリ（Prisma / InMemory）
-│   │       ├── service.ts       # ユースケース・バリデーション
-│   │       ├── resolvers.ts     # GraphQL リゾルバー
-│   │       └── service.test.ts
-│   ├── scripts/          # フィード初期投入・取得スクリプト
-│   ├── app.ts            # Express + ApolloServer 組み立て
-│   └── index.ts          # サーバー起動
-├── prisma/
-│   ├── schema.prisma
-│   └── migrations/
-├── docker-compose.yml    # PostgreSQL 開発用
-├── .env.example
-└── package.json
+├── backend/
+│   ├── src/
+│   │   ├── config/           # 環境変数・ロガー
+│   │   ├── lib/               # Prisma クライアント・RSS パーサー・デフォルトフィード
+│   │   ├── graphql/           # GraphQL スキーマ・スカラー
+│   │   ├── features/          # ドメインモジュール
+│   │   │   └── rss/           # Feed / Article ドメイン
+│   │   │       ├── domain.ts
+│   │   │       ├── schemas.ts
+│   │   │       ├── repository.ts    # リポジトリ（Prisma / InMemory）
+│   │   │       ├── service.ts       # ユースケース・バリデーション
+│   │   │       ├── resolvers.ts     # GraphQL リゾルバー
+│   │   │       └── service.test.ts
+│   │   ├── scripts/          # フィード初期投入・取得スクリプト
+│   │   ├── app.ts            # Express + ApolloServer 組み立て
+│   │   └── index.ts          # サーバー起動
+│   ├── prisma/
+│   │   ├── schema.prisma
+│   │   └── migrations/
+│   ├── .env.example
+│   └── package.json
+├── frontend/                 # React + Vite + Apollo Client の管理画面
+├── docker-compose.yml
+└── Dockerfile
 ```
 
 ## セットアップ
 
 ```bash
+cd backend
 npm install
 cp .env.example .env   # 必要に応じて編集
 npm run db:migrate
@@ -56,7 +62,7 @@ npm run seed
 npm run dev
 ```
 
-`.env` の `DATABASE_URL` を `postgresql://rss:rss@localhost:5432/rss` に変更すれば `docker-compose.yml` の PostgreSQL に接続できます。
+`backend/.env` の `DATABASE_URL` を `postgresql://rss:rss@localhost:5432/rss` に変更すれば `docker-compose.yml` の PostgreSQL に接続できます。
 
 ## 主なスクリプト
 
@@ -127,7 +133,9 @@ mutation {
 
 ```bash
 # バックエンドを起動
+cd backend
 cp .env.example .env
+npm install
 npm run db:migrate
 npm run seed
 npm run dev
@@ -138,7 +146,7 @@ npm install
 npm run dev
 ```
 
-`npm run build` でバックエンドとフロントエンドを両方ビルドし、`npm start` すると `http://localhost:4000` で UI と GraphQL API の両方が利用できます。
+それぞれで `npm run build` を実行してバックエンドとフロントエンドをビルドし、`cd backend && npm start` すると `http://localhost:4000` で UI と GraphQL API の両方が利用できます。
 
 ## Docker
 
@@ -151,7 +159,9 @@ docker run -p 4000:4000 rss-sec-dashboard
 docker compose up --build -d
 ```
 
-`docker run` / `docker compose` では `DATABASE_URL=file:./data/dev.db` が使われ、起動時に `prisma migrate deploy` でテーブルが作成されます。永続化したい場合は `docker compose` の `app_data` ボリュームを使ってください。
+`docker run` / `docker compose` では `DATABASE_URL=file:/app/backend/data/dev.db` が使われ、起動時に `prisma migrate deploy` でテーブルが作成されます。永続化したい場合は `docker compose` の `app_data` ボリュームを使ってください。
+
+> **Note**: Prisma の SQLite 相対パスは `schema.prisma` からの相対パスとして解決されるため、`file:./data/dev.db` のような相対指定だと `prisma/` 配下に作成されてしまいボリュームに永続化されません。そのため `DATABASE_URL` には絶対パスを使用しています。
 
 ## 設計のポイント
 

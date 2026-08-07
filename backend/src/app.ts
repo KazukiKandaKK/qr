@@ -48,9 +48,9 @@ export async function createApp(): Promise<express.Express> {
     }),
   );
 
-  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+  app.use(express.static(path.join(__dirname, '../../frontend/dist')));
   app.get('*', (_req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+    res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
   });
 
   return app;

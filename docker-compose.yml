@@ -5,12 +5,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: "file:./data/dev.db"
+      DATABASE_URL: "file:/app/backend/data/dev.db"
       LOG_LEVEL: info
     ports:
       - "4000:4000"
     volumes:
-      - app_data:/app/data
+      - app_data:/app/backend/data
 
 volumes:
   app_data:

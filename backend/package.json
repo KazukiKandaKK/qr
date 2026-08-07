@@ -1,17 +1,14 @@
 {
-  "name": "rss-sec-dashboard",
+  "name": "backend",
   "version": "0.1.0",
   "private": true,
-  "description": "GraphQL skeleton for an RSS security news dashboard",
+  "description": "GraphQL API for the RSS security news dashboard",
   "engines": {
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "npm run build:api && npm run build:frontend",
-    "build:api": "prisma generate && tsc",
-    "build:frontend": "cd frontend && npm run build",
+    "build": "prisma generate && tsc",
     "dev": "prisma generate && tsx watch src/index.ts",
-    "dev:frontend": "cd frontend && npm run dev",
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

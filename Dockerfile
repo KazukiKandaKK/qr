@@ -6,14 +6,14 @@ WORKDIR /app
 
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-COPY package*.json ./
-RUN npm ci
+COPY backend/package*.json ./backend/
+RUN cd backend && npm ci
 
-COPY prisma ./prisma
-COPY tsconfig.json ./
-COPY src ./src
+COPY backend/prisma ./backend/prisma
+COPY backend/tsconfig.json ./backend/
+COPY backend/src ./backend/src
 
-RUN npm run build:api
+RUN cd backend && npm run build
 
 COPY frontend/package*.json ./frontend/
 COPY frontend/vite.config.ts ./frontend/
@@ -30,17 +30,19 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
-ENV DATABASE_URL="file:./data/dev.db"
+ENV DATABASE_URL="file:/app/backend/data/dev.db"
 
-COPY package*.json ./
-COPY prisma ./prisma
+COPY backend/package*.json ./backend/
+COPY backend/prisma ./backend/prisma
 
-RUN npm ci --omit=dev && npx prisma generate
+RUN cd backend && npm ci --omit=dev && npx prisma generate
 
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/frontend/dist ./frontend/dist
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/backend/data
+
+WORKDIR /app/backend
 
 EXPOSE 4000
 
