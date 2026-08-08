@@ -5,6 +5,7 @@ import {
   CreateFeedInput,
   UpdateFeedInput,
   ArticleFilter,
+  Stats,
 } from './domain';
 
 export interface RssRepository {
@@ -26,6 +27,9 @@ export interface RssRepository {
   createArticle(data: Omit<Article, 'id'>): Promise<Article>;
   updateArticle(id: string, data: Partial<Article>): Promise<Article>;
   deleteArticle(id: string): Promise<boolean>;
+
+  // stats
+  getStats(): Promise<Stats>;
 }
 
 function toFeed(row: {
@@ -178,6 +182,28 @@ export class PrismaRssRepository implements RssRepository {
     } catch {
       return false;
     }
+  }
+
+  async getStats(): Promise<Stats> {
+    const [
+      feedCount,
+      articleCount,
+      readCount,
+      starredCount,
+    ] = await Promise.all([
+      this.prisma.feed.count(),
+      this.prisma.article.count(),
+      this.prisma.article.count({ where: { isRead: true } }),
+      this.prisma.article.count({ where: { isStarred: true } }),
+    ]);
+
+    return {
+      feedCount,
+      articleCount,
+      readCount,
+      starredCount,
+      unreadCount: articleCount - readCount,
+    };
   }
 }
 
@@ -332,5 +358,21 @@ export class InMemoryRssRepository implements RssRepository {
 
   async deleteArticle(id: string): Promise<boolean> {
     return this.articles.delete(id);
+  }
+
+  async getStats(): Promise<Stats> {
+    const feedCount = this.feeds.size;
+    const articles = Array.from(this.articles.values());
+    const articleCount = articles.length;
+    const readCount = articles.filter((a) => a.isRead).length;
+    const starredCount = articles.filter((a) => a.isStarred).length;
+
+    return {
+      feedCount,
+      articleCount,
+      readCount,
+      starredCount,
+      unreadCount: articleCount - readCount,
+    };
   }
 }

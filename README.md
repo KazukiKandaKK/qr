@@ -125,6 +125,16 @@ mutation {
     isRead
   }
 }
+
+query {
+  stats {
+    feedCount
+    articleCount
+    readCount
+    unreadCount
+    starredCount
+  }
+}
 ```
 
 ## フロントエンド UI

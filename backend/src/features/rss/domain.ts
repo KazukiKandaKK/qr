@@ -40,3 +40,11 @@ export interface ArticleFilter {
   isStarred?: boolean;
   keyword?: string;
 }
+
+export interface Stats {
+  feedCount: number;
+  articleCount: number;
+  readCount: number;
+  unreadCount: number;
+  starredCount: number;
+}

@@ -5,6 +5,7 @@ import {
   CreateFeedInput,
   UpdateFeedInput,
   ArticleFilter,
+  Stats,
 } from './domain';
 import {
   createFeedSchema,
@@ -34,6 +35,11 @@ export class RssService {
   listFeeds(): Promise<Feed[]> {
     this.logger.debug('listing feeds');
     return this.repository.findFeeds();
+  }
+
+  getStats(): Promise<Stats> {
+    this.logger.debug('getting stats');
+    return this.repository.getStats();
   }
 
   getFeed(id: string): Promise<Feed | null> {
