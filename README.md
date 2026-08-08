@@ -38,6 +38,8 @@ qr/
 │   │   │       ├── service.ts       # ユースケース・バリデーション
 │   │   │       ├── resolvers.ts     # GraphQL リゾルバー
 │   │   │       └── service.test.ts
+│   │   ├── routes/           # REST API サンプル
+│   │   │   └── api.ts
 │   │   ├── scripts/          # フィード初期投入・取得スクリプト
 │   │   ├── app.ts            # Express + ApolloServer 組み立て
 │   │   └── index.ts          # サーバー起動
@@ -125,6 +127,23 @@ mutation {
     isRead
   }
 }
+```
+
+## REST API サンプル
+
+GraphQL 以外に、同一の `RssService` を使った最小限の REST エンドポイントも用意しています（`backend/src/routes/api.ts`）。
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| GET | `/api/health` | ヘルスチェック |
+| GET | `/api/feeds` | Feed 一覧 |
+| GET | `/api/feeds/:id` | 特定 Feed |
+| GET | `/api/feeds/:id/articles` | 指定 Feed の Article 一覧 |
+| GET | `/api/articles` | Article 一覧（`feedId`, `keyword`, `isRead`, `isStarred` クエリパラメータ対応） |
+
+```bash
+curl http://localhost:4000/api/feeds
+curl "http://localhost:4000/api/articles?isStarred=true"
 ```
 
 ## フロントエンド UI
