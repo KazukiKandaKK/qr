@@ -91,4 +91,41 @@ describe('RssService', () => {
     const starred = await service.markArticleStarred(article.id, true);
     expect(starred.isStarred).toBe(true);
   });
+
+  it('returns stats', async () => {
+    const feed = await service.createFeed({
+      name: 'Security Feed',
+      url: 'https://example.com/feed',
+      category: 'News',
+    });
+    await repo.createArticle({
+      feedId: feed.id,
+      title: 'Read Alert',
+      link: 'https://example.com/1',
+      snippet: 'read',
+      publishedAt: new Date(),
+      fetchedAt: new Date(),
+      isRead: true,
+      isStarred: true,
+    });
+    await repo.createArticle({
+      feedId: feed.id,
+      title: 'Unread Alert',
+      link: 'https://example.com/2',
+      snippet: 'unread',
+      publishedAt: new Date(),
+      fetchedAt: new Date(),
+      isRead: false,
+      isStarred: false,
+    });
+
+    const stats = await service.getStats();
+    expect(stats).toEqual({
+      feedCount: 1,
+      articleCount: 2,
+      readCount: 1,
+      unreadCount: 1,
+      starredCount: 1,
+    });
+  });
 });

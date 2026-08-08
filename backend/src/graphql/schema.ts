@@ -54,11 +54,20 @@ export const typeDefs = /* GraphQL */ `
     error: String
   }
 
+  type Stats {
+    feedCount: Int!
+    articleCount: Int!
+    readCount: Int!
+    unreadCount: Int!
+    starredCount: Int!
+  }
+
   type Query {
     feeds: [Feed!]!
     feed(id: ID!): Feed
     articles(filter: ArticleFilterInput): [Article!]!
     article(id: ID!): Article
+    stats: Stats!
   }
 
   type Mutation {

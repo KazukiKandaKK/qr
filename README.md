@@ -125,6 +125,16 @@ mutation {
     isRead
   }
 }
+
+query {
+  stats {
+    feedCount
+    articleCount
+    readCount
+    unreadCount
+    starredCount
+  }
+}
 ```
 
 ## フロントエンド UI
@@ -146,7 +156,7 @@ npm install
 npm run dev
 ```
 
-それぞれで `npm run build` を実行してバックエンドとフロントエンドをビルドし、`cd backend && npm start` すると `http://localhost:4000` で UI と GraphQL API の両方が利用できます。
+それぞれで `npm run build` を実行してバックエンドとフロントエンドをビルドし、`cd backend && npm start` すると `http://localhost:4000` で UI と GraphQL API の両方が利用できます。UI はレスポンシブ対応しており、iOS / Android のブラウザでも同じ URL で確認できます。
 
 ## Docker
 

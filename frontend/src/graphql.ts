@@ -75,3 +75,15 @@ export const DELETE_ARTICLE = gql`
     deleteArticle(id: $id)
   }
 `
+
+export const GET_STATS = gql`
+  query GetStats {
+    stats {
+      feedCount
+      articleCount
+      readCount
+      unreadCount
+      starredCount
+    }
+  }
+`

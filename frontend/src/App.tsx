@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@apollo/client'
 import {
   GET_FEEDS,
   GET_ARTICLES,
+  GET_STATS,
   CREATE_FEED,
   FETCH_FEEDS,
   MARK_ARTICLE_READ,
@@ -18,6 +19,7 @@ function App() {
   const [onlyStarred, setOnlyStarred] = useState(false)
 
   const { data: feedData, refetch: refetchFeeds } = useQuery(GET_FEEDS)
+  const { data: statsData, refetch: refetchStats } = useQuery(GET_STATS)
   const { data: articleData, refetch: refetchArticles } = useQuery(
     GET_ARTICLES,
     {
@@ -65,22 +67,28 @@ function App() {
       .join('\n')
     setFetchResult(summary || 'No feeds fetched')
     await refetchArticles()
+    await refetchStats()
   }
 
   const handleToggleRead = async (id: string, isRead: boolean) => {
     await markRead({ variables: { id, isRead: !isRead } })
     await refetchArticles()
+    await refetchStats()
   }
 
   const handleToggleStar = async (id: string, isStarred: boolean) => {
     await markStarred({ variables: { id, isStarred: !isStarred } })
     await refetchArticles()
+    await refetchStats()
   }
 
   const handleDelete = async (id: string) => {
     await deleteArticle({ variables: { id } })
     await refetchArticles()
+    await refetchStats()
   }
+
+  const stats = statsData?.stats
 
   return (
     <div className="app">
@@ -89,6 +97,27 @@ function App() {
       </header>
 
       <main>
+        <section className="card stats">
+          <h2>Stats</h2>
+          <div className="stats-grid">
+            <div className="stat">
+              <strong>{stats?.feedCount ?? 0}</strong>
+              <span>Feeds</span>
+            </div>
+            <div className="stat">
+              <strong>{stats?.articleCount ?? 0}</strong>
+              <span>Articles</span>
+            </div>
+            <div className="stat">
+              <strong>{stats?.unreadCount ?? 0}</strong>
+              <span>Unread</span>
+            </div>
+            <div className="stat">
+              <strong>{stats?.starredCount ?? 0}</strong>
+              <span>Starred</span>
+            </div>
+          </div>
+        </section>
         <section className="card">
           <h2>Feeds</h2>
           <form onSubmit={handleCreateFeed} className="form-row">

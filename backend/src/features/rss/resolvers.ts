@@ -16,6 +16,7 @@ export const createRssResolvers = (service: RssService) => ({
     articles: (_: unknown, args: { filter?: object }) =>
       service.listArticles(args.filter),
     article: (_: unknown, args: { id: string }) => service.getArticle(args.id),
+    stats: () => service.getStats(),
   },
   Mutation: {
     createFeed: (_: unknown, args: { input: { name: string; url: string; category: string; enabled?: boolean } }) =>
