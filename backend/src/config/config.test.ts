@@ -13,7 +13,7 @@ describe('config', () => {
 
     expect(config.NODE_ENV).toBe('development');
     expect(config.PORT).toBe(4000);
-    expect(config.DATABASE_URL).toBe('file:./prisma/dev.db');
+    expect(config.DATABASE_URL).toBe('file:./dev.db');
     expect(config.LOG_LEVEL).toBe('info');
   });
 

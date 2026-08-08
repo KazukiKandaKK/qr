@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const databaseUrl = process.env.DATABASE_URL || 'file:./prisma/dev.db';
+const databaseUrl = process.env.DATABASE_URL || 'file:./dev.db';
 
 export default defineConfig({
   testDir: './e2e',

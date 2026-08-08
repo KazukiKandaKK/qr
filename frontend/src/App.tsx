@@ -55,14 +55,15 @@ function App() {
 
   const isAdmin = meData?.me?.role === 'ADMIN'
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    await client.clearStore()
     setToken(localStorage.getItem('token'))
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await client.clearStore()
     localStorage.removeItem('token')
     setToken(null)
-    client.clearStore()
   }
 
   const handleCreateFeed = async (e: FormEvent) => {

@@ -3,7 +3,7 @@ import { useMutation } from '@apollo/client'
 import { LOGIN, REGISTER } from './graphql'
 
 interface LoginProps {
-  onLogin: () => void
+  onLogin: () => void | Promise<void>
 }
 
 export function Login({ onLogin }: LoginProps) {
