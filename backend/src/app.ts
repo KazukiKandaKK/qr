@@ -6,7 +6,7 @@ import { expressMiddleware } from '@as-integrations/express4';
 import { typeDefs } from './graphql/schema';
 import { createRssResolvers } from './features/rss/resolvers';
 import { RssService } from './features/rss/service';
-import { PrismaRssRepository } from './features/rss/repository';
+import { PrismaRssRepository, RssRepository } from './features/rss/repository';
 import { prisma } from './lib/prisma';
 import { config } from './config/config';
 import { logger } from './config/logger';
@@ -17,8 +17,14 @@ export interface AppContext {
   rssService: RssService;
 }
 
-export async function createApp(): Promise<express.Express> {
-  const repository = new PrismaRssRepository(prisma);
+export interface CreateAppOptions {
+  repository?: RssRepository;
+}
+
+export async function createApp(
+  options: CreateAppOptions = {},
+): Promise<express.Express> {
+  const repository = options.repository ?? new PrismaRssRepository(prisma);
   const rssService = new RssService(repository, logger);
 
   const server = new ApolloServer<AppContext>({

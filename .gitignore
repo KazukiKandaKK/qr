@@ -7,4 +7,6 @@ frontend/dist
 *.db
 *.db-journal
 coverage
+frontend/playwright-report
+frontend/test-results
 *.log

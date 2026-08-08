@@ -12,7 +12,7 @@ const MAX_SNIPPET_LENGTH = 200;
 
 const parser = new Parser({ timeout: 30000 });
 
-function toSnippet(raw: string): string {
+export function toSnippet(raw: string): string {
   const text = raw
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
@@ -23,7 +23,10 @@ function toSnippet(raw: string): string {
   return `${text.slice(0, MAX_SNIPPET_LENGTH)}…`;
 }
 
-function toPublishedAt(isoDate: string | undefined, pubDate: string | undefined): Date {
+export function toPublishedAt(
+  isoDate: string | undefined,
+  pubDate: string | undefined,
+): Date {
   const dateString = isoDate || pubDate;
   if (dateString) {
     const parsed = new Date(dateString);

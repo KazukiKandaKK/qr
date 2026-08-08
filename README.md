@@ -73,6 +73,7 @@ npm run dev
 | `npm run start` | 本番用起動（`dist/index.js`） |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run test` | vitest 実行 |
+| `npm run test:coverage` | vitest カバレッジ付き実行 |
 | `npm run seed` | 初期セキュリティフィードを DB に投入 |
 | `npm run fetch` | 有効なフィードを取得して記事を保存 |
 | `npm run db:migrate` | マイグレーション作成・適用 |
@@ -157,6 +158,20 @@ npm run dev
 ```
 
 それぞれで `npm run build` を実行してバックエンドとフロントエンドをビルドし、`cd backend && npm start` すると `http://localhost:4000` で UI と GraphQL API の両方が利用できます。UI はレスポンシブ対応しており、iOS / Android のブラウザでも同じ URL で確認できます。
+
+| コマンド | 説明 |
+|---|---|
+| `npm run dev` | Vite 開発サーバー起動 |
+| `npm run build` | TypeScript コンパイル + 本番ビルド |
+| `npm run test:e2e` | Playwright で E2E テスト実行 |
+
+## CI / GitHub Actions
+
+`.github/workflows/ci.yml` で以下を実行します。
+
+- バックエンド: `typecheck` / `build` / `test:coverage`
+- フロントエンド: `build`
+- E2E: Playwright でデスクトップ Chrome とモバイル Chrome（Pixel 5）を対象に E2E テスト
 
 ## Docker
 
