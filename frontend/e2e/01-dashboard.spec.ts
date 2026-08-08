@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
 import http from 'node:http';
 
-function startLocalRssServer(items: string): Promise<{ server: http.Server; port: number }> {
+function startLocalRssServer(
+  items: string,
+): Promise<{ server: http.Server; port: number }> {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
@@ -27,8 +29,48 @@ function startLocalRssServer(items: string): Promise<{ server: http.Server; port
 test.describe.configure({ mode: 'serial' });
 
 test.describe('RSS Security Dashboard', () => {
+  let adminToken: string;
+
+  test.beforeAll(async ({ request }) => {
+    const email = 'e2e-admin@example.com';
+    const password = 'password123';
+    const register = await request.post('/graphql', {
+      data: {
+        query: `
+          mutation {
+            register(input: { email: "${email}", password: "${password}", name: "E2E Admin" }) {
+              token
+              user { id role }
+            }
+          }
+        `,
+      },
+    });
+    const registerJson = await register.json();
+    if (registerJson.data?.register?.token) {
+      adminToken = registerJson.data.register.token;
+    } else {
+      const login = await request.post('/graphql', {
+        data: {
+          query: `
+            mutation {
+              login(input: { email: "${email}", password: "${password}" }) {
+                token
+              }
+            }
+          `,
+        },
+      });
+      const loginJson = await login.json();
+      adminToken = loginJson.data.login.token;
+    }
+  });
+
   test.beforeEach(async ({ page, request }) => {
+    const authHeaders = { Authorization: `Bearer ${adminToken}` };
+
     const listResult = await request.post('/graphql', {
+      headers: authHeaders,
       data: {
         query: `
           query {
@@ -45,6 +87,7 @@ test.describe('RSS Security Dashboard', () => {
 
     for (const article of listData.articles) {
       await request.post('/graphql', {
+        headers: authHeaders,
         data: {
           query: `mutation { deleteArticle(id: "${article.id}") }`,
         },
@@ -52,14 +95,19 @@ test.describe('RSS Security Dashboard', () => {
     }
     for (const feed of listData.feeds) {
       await request.post('/graphql', {
+        headers: authHeaders,
         data: {
           query: `mutation { deleteFeed(id: "${feed.id}") }`,
         },
       });
     }
 
+    await page.addInitScript((token: string) => {
+      localStorage.setItem('token', token);
+    }, adminToken);
+
     await page.goto('/');
-    await page.waitForSelector('text=RSS Security Dashboard');
+    await expect(page.getByRole('heading', { name: 'Feeds' })).toBeVisible();
   });
 
   test('displays empty state with zero stats', async ({ page }) => {
@@ -110,10 +158,14 @@ test.describe('RSS Security Dashboard', () => {
 
       await article.getByRole('button', { name: 'Mark read' }).click();
       await expect(article).toHaveClass(/read/);
-      await expect(article.getByRole('button', { name: 'Mark unread' })).toBeVisible();
+      await expect(
+        article.getByRole('button', { name: 'Mark unread' }),
+      ).toBeVisible();
 
       await article.getByRole('button', { name: 'Star' }).click();
-      await expect(article.getByRole('button', { name: 'Unstar' })).toBeVisible();
+      await expect(
+        article.getByRole('button', { name: 'Unstar' }),
+      ).toBeVisible();
 
       await article.getByRole('button', { name: 'Delete' }).click();
       await expect(article).toHaveCount(0);

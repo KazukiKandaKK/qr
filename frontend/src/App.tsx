@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useQuery, useMutation } from '@apollo/client'
+import { useQuery, useMutation, useApolloClient } from '@apollo/client'
 import {
   GET_FEEDS,
   GET_ARTICLES,
@@ -9,20 +9,30 @@ import {
   MARK_ARTICLE_READ,
   MARK_ARTICLE_STARRED,
   DELETE_ARTICLE,
+  ME,
 } from './graphql'
+import { Login } from './Login'
 import './index.css'
 
 function App() {
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'))
   const [selectedFeedId, setSelectedFeedId] = useState('')
   const [keyword, setKeyword] = useState('')
   const [onlyUnread, setOnlyUnread] = useState(false)
   const [onlyStarred, setOnlyStarred] = useState(false)
 
-  const { data: feedData, refetch: refetchFeeds } = useQuery(GET_FEEDS)
-  const { data: statsData, refetch: refetchStats } = useQuery(GET_STATS)
+  const client = useApolloClient()
+  const { data: meData, loading: meLoading } = useQuery(ME, { skip: !token })
+  const { data: feedData, refetch: refetchFeeds } = useQuery(GET_FEEDS, {
+    skip: !token,
+  })
+  const { data: statsData, refetch: refetchStats } = useQuery(GET_STATS, {
+    skip: !token,
+  })
   const { data: articleData, refetch: refetchArticles } = useQuery(
     GET_ARTICLES,
     {
+      skip: !token,
       variables: {
         filter: {
           feedId: selectedFeedId || undefined,
@@ -42,6 +52,18 @@ function App() {
 
   const [newFeed, setNewFeed] = useState({ name: '', url: '', category: '' })
   const [fetchResult, setFetchResult] = useState<string | null>(null)
+
+  const isAdmin = meData?.me?.role === 'ADMIN'
+
+  const handleLogin = () => {
+    setToken(localStorage.getItem('token'))
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    setToken(null)
+    client.clearStore()
+  }
 
   const handleCreateFeed = async (e: FormEvent) => {
     e.preventDefault()
@@ -88,12 +110,29 @@ function App() {
     await refetchStats()
   }
 
+  if (!token) {
+    return <Login onLogin={handleLogin} />
+  }
+
+  if (meLoading) {
+    return <div className="loading">Loading...</div>
+  }
+
+  if (!meData?.me) {
+    return <Login onLogin={handleLogin} />
+  }
+
   const stats = statsData?.stats
 
   return (
     <div className="app">
       <header>
         <h1>RSS Security Dashboard</h1>
+        <div className="user-info">
+          <span>{meData.me.email}</span>
+          <span className="badge">{meData.me.role}</span>
+          <button onClick={handleLogout}>Logout</button>
+        </div>
       </header>
 
       <main>
@@ -257,9 +296,11 @@ function App() {
                     >
                       {article.isStarred ? 'Unstar' : 'Star'}
                     </button>
-                    <button onClick={() => handleDelete(article.id)}>
-                      Delete
-                    </button>
+                    {isAdmin && (
+                      <button onClick={() => handleDelete(article.id)}>
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </li>
               ),

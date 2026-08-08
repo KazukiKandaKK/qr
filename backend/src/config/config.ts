@@ -8,6 +8,8 @@ const schema = z.object({
   LOG_LEVEL: z
     .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal'])
     .default('info'),
+  JWT_SECRET: z.string().min(1).default('dev-secret-do-not-use-in-production'),
+  JWT_EXPIRES_IN: z.string().default('7d'),
 });
 
 export const config = schema.parse(process.env);

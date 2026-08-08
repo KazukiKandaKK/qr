@@ -5,6 +5,9 @@ import { typeDefs } from '../../graphql/schema';
 import { createRssResolvers } from './resolvers';
 import { RssService } from './service';
 import { InMemoryRssRepository } from './repository';
+import { InMemoryUserRepository } from '../auth/repository';
+import { AuthService } from '../auth/service';
+import { type User } from '../auth/domain';
 import pino from 'pino';
 
 interface ExecutionResponse {
@@ -16,6 +19,7 @@ describe('GraphQL resolvers', () => {
   let server: ApolloServer;
   let service: RssService;
   let repo: InMemoryRssRepository;
+  let adminUser: User;
 
   beforeEach(async () => {
     repo = new InMemoryRssRepository();
@@ -25,6 +29,14 @@ describe('GraphQL resolvers', () => {
       resolvers: createRssResolvers(service),
     });
     await server.start();
+
+    const userRepo = new InMemoryUserRepository();
+    const authService = new AuthService(userRepo, 'test-secret', '1h');
+    adminUser = await authService.register({
+      email: 'admin@example.com',
+      password: 'password123',
+      name: 'Admin',
+    });
   });
 
   afterEach(async () => {
@@ -34,8 +46,12 @@ describe('GraphQL resolvers', () => {
   const execute = async (
     query: string,
     variables?: Record<string, unknown>,
+    contextValue: { user?: User } = { user: adminUser },
   ): Promise<ExecutionResponse> => {
-    const result = await server.executeOperation({ query, variables });
+    const result = await server.executeOperation(
+      { query, variables },
+      { contextValue },
+    );
     if (result.body.kind !== 'single') {
       return { data: null, errors: [] };
     }
@@ -62,6 +78,75 @@ describe('GraphQL resolvers', () => {
     `);
     expect(listResult.errors).toBeUndefined();
     expect(listResult.data?.feeds).toHaveLength(1);
+  });
+
+  it('rejects unauthenticated createFeed', async () => {
+    const result = await execute(
+      `
+      mutation {
+        createFeed(input: { name: "A", url: "https://example.com/a", category: "News" }) {
+          id
+        }
+      }
+    `,
+      {},
+      { user: undefined },
+    );
+    expect(result.errors).toBeDefined();
+    expect(result.errors?.[0].message).toBe('Unauthorized');
+  });
+
+  it('rejects non-admin deleteFeed and deleteArticle', async () => {
+    const createResult = await execute(`
+      mutation {
+        createFeed(input: { name: "A", url: "https://example.com/a", category: "News" }) {
+          id
+        }
+      }
+    `);
+    const feedId = createResult.data?.createFeed.id as string;
+
+    const article = await repo.createArticle({
+      feedId,
+      title: 'A',
+      link: 'https://example.com/1',
+      snippet: 'x',
+      publishedAt: new Date(),
+      fetchedAt: new Date(),
+      isRead: false,
+      isStarred: false,
+    });
+
+    const normalUser: User = {
+      id: 'user-1',
+      email: 'user@example.com',
+      name: null,
+      role: 'USER',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const deleteFeedResult = await execute(
+      `
+      mutation ($id: ID!) {
+        deleteFeed(id: $id)
+      }
+    `,
+      { id: feedId },
+      { user: normalUser },
+    );
+    expect(deleteFeedResult.errors?.[0].message).toBe('Forbidden');
+
+    const deleteArticleResult = await execute(
+      `
+      mutation ($id: ID!) {
+        deleteArticle(id: $id)
+      }
+    `,
+      { id: article.id },
+      { user: normalUser },
+    );
+    expect(deleteArticleResult.errors?.[0].message).toBe('Forbidden');
   });
 
   it('returns a feed by id', async () => {
@@ -370,13 +455,16 @@ describe('GraphQL resolvers', () => {
     });
     await fetchServer.start();
 
-    const result = await fetchServer.executeOperation({
-      query: `
-        mutation {
-          fetchFeeds { feedName inserted updated }
-        }
-      `,
-    });
+    const result = await fetchServer.executeOperation(
+      {
+        query: `
+          mutation {
+            fetchFeeds { feedName inserted updated }
+          }
+        `,
+      },
+      { contextValue: { user: adminUser } },
+    );
 
     if (result.body.kind !== 'single') {
       expect(true).toBe(false);

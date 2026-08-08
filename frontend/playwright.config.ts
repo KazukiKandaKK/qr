@@ -14,7 +14,7 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: `cd ../backend && DATABASE_URL=${databaseUrl} npx prisma migrate deploy && DATABASE_URL=${databaseUrl} npm run build && cd ../frontend && npm run build && cd ../backend && DATABASE_URL=${databaseUrl} npm start`,
+    command: `cd ../backend && rm -f prisma/dev.db && DATABASE_URL=${databaseUrl} npx prisma migrate deploy && DATABASE_URL=${databaseUrl} npm run build && cd ../frontend && npm run build && cd ../backend && DATABASE_URL=${databaseUrl} npm start`,
     url: 'http://localhost:4000/health',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

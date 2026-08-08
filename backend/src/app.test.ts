@@ -3,9 +3,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import http from 'node:http';
 import { createApp } from './app';
 import { InMemoryRssRepository } from './features/rss/repository';
+import { InMemoryUserRepository } from './features/auth/repository';
 
-async function startAppServer(repository: InMemoryRssRepository) {
-  const app = await createApp({ repository });
+async function startAppServer(
+  repository: InMemoryRssRepository,
+  userRepository: InMemoryUserRepository,
+) {
+  const app = await createApp({ repository, userRepository });
   const server = http.createServer(app);
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const address = server.address();
@@ -13,10 +17,15 @@ async function startAppServer(repository: InMemoryRssRepository) {
   return { server, port };
 }
 
-async function postJson(port: number, path: string, body: unknown) {
+async function postJson(
+  port: number,
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+) {
   const res = await fetch(`http://localhost:${port}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
   return { status: res.status, body: (await res.json()) as unknown };
@@ -26,12 +35,28 @@ describe('createApp integration', () => {
   let server: http.Server;
   let port: number;
   let repo: InMemoryRssRepository;
+  let userRepo: InMemoryUserRepository;
+  let token: string;
 
   beforeEach(async () => {
     repo = new InMemoryRssRepository();
-    const started = await startAppServer(repo);
+    userRepo = new InMemoryUserRepository();
+    const started = await startAppServer(repo, userRepo);
     server = started.server;
     port = started.port;
+
+    const { body } = await postJson(port, '/graphql', {
+      query: `
+        mutation {
+          register(input: { email: "admin@example.com", password: "password123", name: "Admin" }) {
+            token
+            user { id role }
+          }
+        }
+      `,
+    });
+    token = (body as { data: { register: { token: string } } }).data.register
+      .token;
   });
 
   afterEach(
@@ -55,9 +80,14 @@ describe('createApp integration', () => {
       category: 'News',
     });
 
-    const { status, body } = await postJson(port, '/graphql', {
-      query: `query { feeds { id name } }`,
-    });
+    const { status, body } = await postJson(
+      port,
+      '/graphql',
+      {
+        query: `query { feeds { id name } }`,
+      },
+      { Authorization: `Bearer ${token}` },
+    );
     expect(status).toBe(200);
     const data = (body as { data: { feeds: unknown[] } }).data;
     expect(data.feeds).toHaveLength(1);
@@ -65,19 +95,41 @@ describe('createApp integration', () => {
   });
 
   it('serves GraphQL mutations', async () => {
+    const { status, body } = await postJson(
+      port,
+      '/graphql',
+      {
+        query: `
+          mutation {
+            createFeed(input: { name: "A", url: "https://example.com/a", category: "News" }) {
+              id
+              name
+            }
+          }
+        `,
+      },
+      { Authorization: `Bearer ${token}` },
+    );
+    expect(status).toBe(200);
+    const data = (body as { data: { createFeed: { name: string } } }).data;
+    expect(data.createFeed.name).toBe('A');
+  });
+
+  it('rejects unauthenticated mutations', async () => {
     const { status, body } = await postJson(port, '/graphql', {
       query: `
         mutation {
           createFeed(input: { name: "A", url: "https://example.com/a", category: "News" }) {
             id
-            name
           }
         }
       `,
     });
     expect(status).toBe(200);
-    const data = (body as { data: { createFeed: { name: string } } }).data;
-    expect(data.createFeed.name).toBe('A');
+    const errors = (body as { errors: { message: string }[] }).errors;
+    expect(errors).toBeDefined();
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].message).toBe('Unauthorized');
   });
 
   it('serves the SPA fallback', async () => {
