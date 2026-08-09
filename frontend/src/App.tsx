@@ -22,7 +22,10 @@ function App() {
   const [onlyStarred, setOnlyStarred] = useState(false)
 
   const client = useApolloClient()
-  const { data: meData, loading: meLoading } = useQuery(ME, { skip: !token })
+  const { data: meData, loading: meLoading } = useQuery(ME, {
+    skip: !token,
+    fetchPolicy: 'network-only',
+  })
   const { data: feedData, refetch: refetchFeeds } = useQuery(GET_FEEDS, {
     skip: !token,
   })
