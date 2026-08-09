@@ -16,6 +16,7 @@
     "db:studio": "prisma studio",
     "seed": "tsx src/scripts/seedFeeds.ts",
     "fetch": "tsx src/scripts/fetchFeeds.ts",
+    "db:backup": "tsx src/scripts/backupDb.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

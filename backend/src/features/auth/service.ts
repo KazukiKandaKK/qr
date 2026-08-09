@@ -4,9 +4,11 @@ import { User, AuthPayload, Role, RequestMeta } from './domain';
 import {
   UserRepository,
   AuditLogRepository,
+  AuditLogEntry,
   InMemoryAuditLogRepository,
 } from './repository';
 import { registerInputSchema, loginInputSchema } from './schemas';
+import { paginationSchema } from '../rss/schemas';
 
 export interface AuthServiceOptions {
   auditLogRepository?: AuditLogRepository;
@@ -204,5 +206,55 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  async exportMyData(
+    userId: string,
+  ): Promise<{ user: User; auditLogs: AuditLogEntry[] }> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    const auditLogs = await this.auditLogRepository.findByActorId(
+      userId,
+      100,
+      0,
+    );
+    return { user, auditLogs };
+  }
+
+  async deleteMyAccount(
+    userId: string,
+    requestMeta?: RequestMeta,
+  ): Promise<void> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    await this.auditLogRepository.create({
+      action: 'ACCOUNT_DELETION',
+      actorId: user.id,
+      actorEmail: user.email,
+      ip: requestMeta?.ip,
+      userAgent: requestMeta?.userAgent,
+    });
+
+    await this.auditLogRepository.deleteByActorId(userId);
+    await this.userRepository.delete(userId);
+  }
+
+  async listAuditLogs(
+    requestingUser: User,
+    args: { limit?: number; offset?: number },
+  ): Promise<AuditLogEntry[]> {
+    if (requestingUser.role !== 'ADMIN') {
+      throw new Error('Forbidden');
+    }
+    const pagination = paginationSchema.parse(args);
+    return this.auditLogRepository.findRecent(
+      pagination.limit ?? 100,
+      pagination.offset,
+    );
   }
 }

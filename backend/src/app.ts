@@ -73,7 +73,30 @@ export async function createApp(
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
-  app.use(helmet({ contentSecurityPolicy: config.NODE_ENV === 'production' }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+        },
+      },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+      xFrameOptions: { action: 'deny' },
+    }),
+  );
 
   const corsOriginValue = config.CORS_ORIGIN.toLowerCase();
   const corsOrigin =
@@ -81,6 +104,14 @@ export async function createApp(
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  app.get('/.well-known/security.txt', (_req, res) => {
+    res.type('text/plain');
+    res.send(securityTxt());
+  });
+  app.get('/security.txt', (_req, res) => {
+    res.redirect('/.well-known/security.txt');
   });
 
   const authRateLimit = rateLimit({
@@ -151,6 +182,18 @@ function isAuthMutation(req: express.Request): boolean {
   if (!body) return false;
   if (Array.isArray(body)) return body.some(isSingleAuthMutation);
   return isSingleAuthMutation(body);
+}
+
+function securityTxt(): string {
+  return [
+    'Contact: mailto:security@example.com',
+    'Expires: 2027-12-31T00:00:00.000Z',
+    'Acknowledgments: /security-acknowledgments',
+    'Policy: /security-policy',
+    '',
+    '# This is a sample security.txt for ISO 27017 readiness.',
+    '# Replace the contact and policy URLs with real values before production.',
+  ].join('\n');
 }
 
 function isSingleAuthMutation(body: GraphqlRequestBody): boolean {

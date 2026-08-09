@@ -17,6 +17,7 @@ export interface UserRepository {
     failedLoginAttempts: number,
     lockedUntil: Date | null,
   ): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 type UserRow = {
@@ -77,6 +78,9 @@ export interface CreateAuditLogInput {
 
 export interface AuditLogRepository {
   create(input: CreateAuditLogInput): Promise<AuditLogEntry>;
+  findRecent(limit: number, offset: number): Promise<AuditLogEntry[]>;
+  findByActorId(actorId: string, limit: number, offset: number): Promise<AuditLogEntry[]>;
+  deleteByActorId(actorId: string): Promise<void>;
 }
 
 export class PrismaUserRepository implements UserRepository {
@@ -157,6 +161,10 @@ export class PrismaUserRepository implements UserRepository {
     return this.prisma.user.count();
   }
 
+  async delete(id: string): Promise<void> {
+    await this.prisma.user.delete({ where: { id } });
+  }
+
   async updateFailedLoginAttempts(
     id: string,
     failedLoginAttempts: number,
@@ -227,6 +235,10 @@ export class InMemoryUserRepository implements UserRepository {
     return this.users.size;
   }
 
+  async delete(id: string): Promise<void> {
+    this.users.delete(id);
+  }
+
   async updateFailedLoginAttempts(
     id: string,
     failedLoginAttempts: number,
@@ -283,6 +295,33 @@ export class PrismaAuditLogRepository implements AuditLogRepository {
     });
     return toAuditLog(row);
   }
+
+  async findRecent(limit: number, offset: number): Promise<AuditLogEntry[]> {
+    const rows = await this.prisma.auditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
+    });
+    return rows.map(toAuditLog);
+  }
+
+  async findByActorId(
+    actorId: string,
+    limit: number,
+    offset: number,
+  ): Promise<AuditLogEntry[]> {
+    const rows = await this.prisma.auditLog.findMany({
+      where: { actorId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
+    });
+    return rows.map(toAuditLog);
+  }
+
+  async deleteByActorId(actorId: string): Promise<void> {
+    await this.prisma.auditLog.deleteMany({ where: { actorId } });
+  }
 }
 
 export class InMemoryAuditLogRepository implements AuditLogRepository {
@@ -298,6 +337,28 @@ export class InMemoryAuditLogRepository implements AuditLogRepository {
     };
     this.logs.push(entry);
     return entry;
+  }
+
+  async findRecent(limit: number, offset: number): Promise<AuditLogEntry[]> {
+    const sorted = [...this.logs].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
+    return sorted.slice(offset, offset + limit);
+  }
+
+  async findByActorId(
+    actorId: string,
+    limit: number,
+    offset: number,
+  ): Promise<AuditLogEntry[]> {
+    const filtered = this.logs
+      .filter((log) => log.actorId === actorId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return filtered.slice(offset, offset + limit);
+  }
+
+  async deleteByActorId(actorId: string): Promise<void> {
+    this.logs = this.logs.filter((log) => log.actorId !== actorId);
   }
 
   getLogs(): AuditLogEntry[] {

@@ -1,9 +1,22 @@
 import { AuthService } from './service';
-import { AuthContext } from './guards';
+import { AuthContext, requireAuth, requireAdmin } from './guards';
+import { AuditLogEntry } from './repository';
 
 export const createAuthResolvers = (authService: AuthService) => ({
+  AuditLog: {
+    metadata: (log: AuditLogEntry) =>
+      log.metadata ? JSON.stringify(log.metadata) : null,
+  },
   Query: {
     me: (_: unknown, __: unknown, ctx: AuthContext) => ctx?.user ?? null,
+    auditLogs: (
+      _: unknown,
+      args: { limit?: number; offset?: number },
+      ctx: AuthContext,
+    ) => {
+      const user = requireAdmin(ctx);
+      return authService.listAuditLogs(user, args);
+    },
   },
   Mutation: {
     register: async (
@@ -29,5 +42,17 @@ export const createAuthResolvers = (authService: AuthService) => ({
         ip: ctx?.ip,
         userAgent: ctx?.userAgent,
       }),
+    exportMyData: async (_: unknown, __: unknown, ctx: AuthContext) => {
+      const user = requireAuth(ctx);
+      return authService.exportMyData(user.id);
+    },
+    deleteMyAccount: async (_: unknown, __: unknown, ctx: AuthContext) => {
+      const user = requireAuth(ctx);
+      await authService.deleteMyAccount(user.id, {
+        ip: ctx?.ip,
+        userAgent: ctx?.userAgent,
+      });
+      return true;
+    },
   },
 });

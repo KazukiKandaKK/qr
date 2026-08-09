@@ -196,4 +196,52 @@ describe('AuthService', () => {
     const verified = await service.verifyToken(`${token}tampered`);
     expect(verified).toBeNull();
   });
+
+  it('exports user data with audit logs', async () => {
+    const user = await service.register({
+      email: 'a@example.com',
+      password: TEST_PASSWORD,
+    });
+    await service.login({ email: 'a@example.com', password: TEST_PASSWORD });
+
+    const exported = await service.exportMyData(user.id);
+    expect(exported.user.email).toBe('a@example.com');
+    expect(exported.auditLogs.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('deletes the user account and related audit logs', async () => {
+    const user = await service.register({
+      email: 'a@example.com',
+      password: TEST_PASSWORD,
+    });
+    await service.deleteMyAccount(user.id);
+
+    expect(await service.verifyToken(service.issueToken(user))).toBeNull();
+    expect(await service.exportMyData(user.id).catch((e) => e.message)).toBe(
+      'User not found',
+    );
+  });
+
+  it('allows admins to list audit logs', async () => {
+    const admin = await service.register({
+      email: 'admin@example.com',
+      password: TEST_PASSWORD,
+    });
+    const logs = await service.listAuditLogs(admin, { limit: 10 });
+    expect(logs.length).toBeGreaterThan(0);
+  });
+
+  it('prevents non-admins from listing audit logs', async () => {
+    await service.register({
+      email: 'admin@example.com',
+      password: TEST_PASSWORD,
+    });
+    const user = await service.register({
+      email: 'user@example.com',
+      password: TEST_PASSWORD,
+    });
+    await expect(
+      service.listAuditLogs(user, { limit: 10 }),
+    ).rejects.toThrow('Forbidden');
+  });
 });
