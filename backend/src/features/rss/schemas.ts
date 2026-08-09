@@ -19,3 +19,10 @@ export const articleFilterSchema = z.object({
   isStarred: z.boolean().optional(),
   keyword: z.string().optional(),
 });
+
+const MAX_PAGE_LIMIT = 100;
+
+export const paginationSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).optional(),
+  offset: z.coerce.number().int().min(0).default(0),
+});
