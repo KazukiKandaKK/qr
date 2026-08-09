@@ -12,25 +12,30 @@ import { createRssResolvers } from './features/rss/resolvers';
 import { RssService } from './features/rss/service';
 import { PrismaRssRepository, RssRepository } from './features/rss/repository';
 import { createRssLoaders, type RssLoaders } from './features/rss/loaders';
-import { PrismaUserRepository, UserRepository } from './features/auth/repository';
+import {
+  PrismaUserRepository,
+  UserRepository,
+  PrismaAuditLogRepository,
+  AuditLogRepository,
+} from './features/auth/repository';
 import { AuthService } from './features/auth/service';
 import { createAuthResolvers } from './features/auth/resolvers';
-import { User } from './features/auth/domain';
+import { AuthContext } from './features/auth/guards';
 import { prisma } from './lib/prisma';
 import { config } from './config/config';
 import { logger } from './config/logger';
 import type pino from 'pino';
 
-export interface AppContext {
+export interface AppContext extends AuthContext {
   logger: pino.Logger;
   rssService: RssService;
   loaders: RssLoaders;
-  user?: User;
 }
 
 export interface CreateAppOptions {
   repository?: RssRepository;
   userRepository?: UserRepository;
+  auditLogRepository?: AuditLogRepository;
 }
 
 export async function createApp(
@@ -38,12 +43,19 @@ export async function createApp(
 ): Promise<express.Express> {
   const repository = options.repository ?? new PrismaRssRepository(prisma);
   const userRepository = options.userRepository ?? new PrismaUserRepository(prisma);
+  const auditLogRepository =
+    options.auditLogRepository ?? new PrismaAuditLogRepository(prisma);
   const rssService = new RssService(repository, logger);
   const loaders = createRssLoaders(repository);
   const authService = new AuthService(
     userRepository,
     config.JWT_SECRET,
     config.JWT_EXPIRES_IN,
+    {
+      auditLogRepository,
+      maxFailedLogins: config.AUTH_MAX_FAILED_LOGINS,
+      lockoutDurationMs: config.AUTH_LOCKOUT_DURATION_MS,
+    },
   );
 
   const server = new ApolloServer<AppContext>({
@@ -93,7 +105,14 @@ export async function createApp(
         const user = await authService.verifyToken(
           extractBearerToken(req.headers.authorization),
         );
-        return { logger, rssService, loaders, user: user ?? undefined };
+        return {
+          logger,
+          rssService,
+          loaders,
+          user: user ?? undefined,
+          ip: getClientIp(req),
+          userAgent: req.headers['user-agent'],
+        };
       },
     }),
   );
@@ -110,6 +129,17 @@ function extractBearerToken(header?: string | string[]): string {
   if (typeof header !== 'string') return '';
   const match = header.match(/^Bearer\s+(?<token>\S+)$/i);
   return match?.groups?.token ?? '';
+}
+
+function getClientIp(req: express.Request): string | undefined {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (Array.isArray(forwarded)) {
+    return forwarded[0]?.split(',')[0]?.trim();
+  }
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0]?.trim();
+  }
+  return req.ip ?? req.socket.remoteAddress ?? undefined;
 }
 
 interface GraphqlRequestBody {

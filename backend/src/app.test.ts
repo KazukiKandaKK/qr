@@ -3,13 +3,17 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import http from 'node:http';
 import { createApp } from './app';
 import { InMemoryRssRepository } from './features/rss/repository';
-import { InMemoryUserRepository } from './features/auth/repository';
+import {
+  InMemoryUserRepository,
+  InMemoryAuditLogRepository,
+} from './features/auth/repository';
 
 async function startAppServer(
   repository: InMemoryRssRepository,
   userRepository: InMemoryUserRepository,
+  auditLogRepository: InMemoryAuditLogRepository,
 ) {
-  const app = await createApp({ repository, userRepository });
+  const app = await createApp({ repository, userRepository, auditLogRepository });
   const server = http.createServer(app);
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const address = server.address();
@@ -36,19 +40,21 @@ describe('createApp integration', () => {
   let port: number;
   let repo: InMemoryRssRepository;
   let userRepo: InMemoryUserRepository;
+  let auditRepo: InMemoryAuditLogRepository;
   let token: string;
 
   beforeEach(async () => {
     repo = new InMemoryRssRepository();
     userRepo = new InMemoryUserRepository();
-    const started = await startAppServer(repo, userRepo);
+    auditRepo = new InMemoryAuditLogRepository();
+    const started = await startAppServer(repo, userRepo, auditRepo);
     server = started.server;
     port = started.port;
 
     const { body } = await postJson(port, '/graphql', {
       query: `
         mutation {
-          register(input: { email: "admin@example.com", password: "password123", name: "Admin" }) {
+          register(input: { email: "admin@example.com", password: "Password123", name: "Admin" }) {
             token
             user { id role }
           }

@@ -1,21 +1,32 @@
 /// <reference types="vitest/globals" />
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AuthService } from './service';
-import { InMemoryUserRepository } from './repository';
+import {
+  InMemoryUserRepository,
+  InMemoryAuditLogRepository,
+} from './repository';
+
+const TEST_PASSWORD = 'Password123';
 
 describe('AuthService', () => {
   let userRepo: InMemoryUserRepository;
+  let auditRepo: InMemoryAuditLogRepository;
   let service: AuthService;
 
   beforeEach(() => {
     userRepo = new InMemoryUserRepository();
-    service = new AuthService(userRepo, 'test-secret', '1h');
+    auditRepo = new InMemoryAuditLogRepository();
+    service = new AuthService(userRepo, 'test-secret', '1h', {
+      auditLogRepository: auditRepo,
+      maxFailedLogins: 3,
+      lockoutDurationMs: 15 * 60 * 1000,
+    });
   });
 
   it('registers the first user as admin', async () => {
     const user = await service.register({
       email: 'admin@example.com',
-      password: 'password123',
+      password: TEST_PASSWORD,
       name: 'Admin',
     });
     expect(user.email).toBe('admin@example.com');
@@ -26,19 +37,19 @@ describe('AuthService', () => {
   it('registers subsequent users as USER', async () => {
     await service.register({
       email: 'admin@example.com',
-      password: 'password123',
+      password: TEST_PASSWORD,
     });
     const user = await service.register({
       email: 'user@example.com',
-      password: 'password123',
+      password: TEST_PASSWORD,
     });
     expect(user.role).toBe('USER');
   });
 
   it('rejects duplicate email registration', async () => {
-    await service.register({ email: 'a@example.com', password: 'password123' });
+    await service.register({ email: 'a@example.com', password: TEST_PASSWORD });
     await expect(
-      service.register({ email: 'a@example.com', password: 'password123' }),
+      service.register({ email: 'a@example.com', password: TEST_PASSWORD }),
     ).rejects.toThrow('Email already registered');
   });
 
@@ -48,20 +59,26 @@ describe('AuthService', () => {
     ).rejects.toThrow();
   });
 
+  it('rejects registration with weak password without uppercase', async () => {
+    await expect(
+      service.register({ email: 'a@example.com', password: 'password123' }),
+    ).rejects.toThrow(/uppercase/);
+  });
+
   it('rejects registration with invalid email', async () => {
     await expect(
-      service.register({ email: 'not-an-email', password: 'password123' }),
+      service.register({ email: 'not-an-email', password: TEST_PASSWORD }),
     ).rejects.toThrow();
   });
 
   it('logs in with valid credentials and returns a token', async () => {
     await service.register({
       email: 'a@example.com',
-      password: 'password123',
+      password: TEST_PASSWORD,
     });
     const payload = await service.login({
       email: 'a@example.com',
-      password: 'password123',
+      password: TEST_PASSWORD,
     });
     expect(payload.token).toBeDefined();
     expect(payload.user.email).toBe('a@example.com');
@@ -70,23 +87,94 @@ describe('AuthService', () => {
   it('rejects login with wrong password', async () => {
     await service.register({
       email: 'a@example.com',
-      password: 'password123',
+      password: TEST_PASSWORD,
     });
     await expect(
-      service.login({ email: 'a@example.com', password: 'wrongpassword' }),
+      service.login({ email: 'a@example.com', password: 'WrongPass123' }),
     ).rejects.toThrow('Invalid email or password');
   });
 
   it('rejects login for unknown email', async () => {
     await expect(
-      service.login({ email: 'unknown@example.com', password: 'password123' }),
+      service.login({ email: 'unknown@example.com', password: TEST_PASSWORD }),
     ).rejects.toThrow('Invalid email or password');
+  });
+
+  it('locks an account after too many failed login attempts', async () => {
+    await service.register({ email: 'a@example.com', password: TEST_PASSWORD });
+
+    for (let i = 0; i < 3; i += 1) {
+      await expect(
+        service.login({ email: 'a@example.com', password: 'WrongPass123' }),
+      ).rejects.toThrow('Invalid email or password');
+    }
+
+    await expect(
+      service.login({ email: 'a@example.com', password: TEST_PASSWORD }),
+    ).rejects.toThrow('Account temporarily locked');
+  });
+
+  it('resets failed attempts after a successful login', async () => {
+    await service.register({ email: 'a@example.com', password: TEST_PASSWORD });
+
+    await expect(
+      service.login({ email: 'a@example.com', password: 'WrongPass123' }),
+    ).rejects.toThrow('Invalid email or password');
+
+    const payload = await service.login({
+      email: 'a@example.com',
+      password: TEST_PASSWORD,
+    });
+    expect(payload.user.email).toBe('a@example.com');
+
+    await expect(
+      service.login({ email: 'a@example.com', password: 'WrongPass123' }),
+    ).rejects.toThrow('Invalid email or password');
+    await expect(
+      service.login({ email: 'a@example.com', password: TEST_PASSWORD }),
+    ).resolves.toBeDefined();
+  });
+
+  it('resets lockout after the lock duration expires', async () => {
+    vi.useFakeTimers();
+    await service.register({ email: 'a@example.com', password: TEST_PASSWORD });
+
+    for (let i = 0; i < 3; i += 1) {
+      await expect(
+        service.login({ email: 'a@example.com', password: 'WrongPass123' }),
+      ).rejects.toThrow('Invalid email or password');
+    }
+
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1);
+
+    const payload = await service.login({
+      email: 'a@example.com',
+      password: TEST_PASSWORD,
+    });
+    expect(payload.user.email).toBe('a@example.com');
+
+    vi.useRealTimers();
+  });
+
+  it('writes audit logs for auth events', async () => {
+    await service.register({
+      email: 'a@example.com',
+      password: TEST_PASSWORD,
+    });
+    await service.login({
+      email: 'a@example.com',
+      password: 'WrongPass123',
+    }).catch(() => {});
+
+    const actions = auditRepo.getLogs().map((entry) => entry.action);
+    expect(actions).toContain('REGISTER');
+    expect(actions).toContain('LOGIN_FAILURE');
   });
 
   it('verifies a valid token', async () => {
     const user = await service.register({
       email: 'a@example.com',
-      password: 'password123',
+      password: TEST_PASSWORD,
     });
     const token = service.issueToken(user);
     const verified = await service.verifyToken(token);
@@ -102,7 +190,7 @@ describe('AuthService', () => {
   it('returns null for a tampered token', async () => {
     const user = await service.register({
       email: 'a@example.com',
-      password: 'password123',
+      password: TEST_PASSWORD,
     });
     const token = service.issueToken(user);
     const verified = await service.verifyToken(`${token}tampered`);

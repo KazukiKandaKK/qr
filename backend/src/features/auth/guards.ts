@@ -3,6 +3,8 @@ import { User } from './domain';
 
 export interface AuthContext {
   user?: User;
+  ip?: string;
+  userAgent?: string;
 }
 
 export function requireAuth(ctx: AuthContext): User {
