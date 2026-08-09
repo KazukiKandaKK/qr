@@ -16,6 +16,8 @@ describe('config', () => {
     delete process.env.RATE_LIMIT_MAX;
     delete process.env.RATE_LIMIT_WINDOW_MS;
     delete process.env.RATE_LIMIT_DISABLED;
+    delete process.env.AUTH_MAX_FAILED_LOGINS;
+    delete process.env.AUTH_LOCKOUT_DURATION_MS;
 
     const { config } = await import('./config');
 
@@ -31,6 +33,8 @@ describe('config', () => {
     expect(config.RATE_LIMIT_MAX).toBe(20);
     expect(config.RATE_LIMIT_WINDOW_MS).toBe(15 * 60 * 1000);
     expect(config.RATE_LIMIT_DISABLED).toBe(false);
+    expect(config.AUTH_MAX_FAILED_LOGINS).toBe(5);
+    expect(config.AUTH_LOCKOUT_DURATION_MS).toBe(15 * 60 * 1000);
   });
 
   it('parses provided env values', async () => {
@@ -47,6 +51,8 @@ describe('config', () => {
     process.env.RATE_LIMIT_MAX = '10';
     process.env.RATE_LIMIT_WINDOW_MS = '60000';
     process.env.RATE_LIMIT_DISABLED = 'true';
+    process.env.AUTH_MAX_FAILED_LOGINS = '3';
+    process.env.AUTH_LOCKOUT_DURATION_MS = '300000';
 
     const { config } = await import('./config');
 
@@ -64,6 +70,8 @@ describe('config', () => {
     expect(config.RATE_LIMIT_MAX).toBe(10);
     expect(config.RATE_LIMIT_WINDOW_MS).toBe(60000);
     expect(config.RATE_LIMIT_DISABLED).toBe(true);
+    expect(config.AUTH_MAX_FAILED_LOGINS).toBe(3);
+    expect(config.AUTH_LOCKOUT_DURATION_MS).toBe(300000);
   });
 
   it('rejects the default JWT_SECRET in production', async () => {

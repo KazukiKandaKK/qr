@@ -23,6 +23,8 @@ const schema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(20),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(15 * 60 * 1000),
   RATE_LIMIT_DISABLED: booleanFromEnv.default(false),
+  AUTH_MAX_FAILED_LOGINS: z.coerce.number().int().min(1).default(5),
+  AUTH_LOCKOUT_DURATION_MS: z.coerce.number().int().min(1).default(15 * 60 * 1000),
 });
 
 export const config = schema.parse(process.env);

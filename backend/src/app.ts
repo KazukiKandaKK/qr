@@ -12,25 +12,30 @@ import { createRssResolvers } from './features/rss/resolvers';
 import { RssService } from './features/rss/service';
 import { PrismaRssRepository, RssRepository } from './features/rss/repository';
 import { createRssLoaders, type RssLoaders } from './features/rss/loaders';
-import { PrismaUserRepository, UserRepository } from './features/auth/repository';
+import {
+  PrismaUserRepository,
+  UserRepository,
+  PrismaAuditLogRepository,
+  AuditLogRepository,
+} from './features/auth/repository';
 import { AuthService } from './features/auth/service';
 import { createAuthResolvers } from './features/auth/resolvers';
-import { User } from './features/auth/domain';
+import { AuthContext } from './features/auth/guards';
 import { prisma } from './lib/prisma';
 import { config } from './config/config';
 import { logger } from './config/logger';
 import type pino from 'pino';
 
-export interface AppContext {
+export interface AppContext extends AuthContext {
   logger: pino.Logger;
   rssService: RssService;
   loaders: RssLoaders;
-  user?: User;
 }
 
 export interface CreateAppOptions {
   repository?: RssRepository;
   userRepository?: UserRepository;
+  auditLogRepository?: AuditLogRepository;
 }
 
 export async function createApp(
@@ -38,12 +43,19 @@ export async function createApp(
 ): Promise<express.Express> {
   const repository = options.repository ?? new PrismaRssRepository(prisma);
   const userRepository = options.userRepository ?? new PrismaUserRepository(prisma);
+  const auditLogRepository =
+    options.auditLogRepository ?? new PrismaAuditLogRepository(prisma);
   const rssService = new RssService(repository, logger);
   const loaders = createRssLoaders(repository);
   const authService = new AuthService(
     userRepository,
     config.JWT_SECRET,
     config.JWT_EXPIRES_IN,
+    {
+      auditLogRepository,
+      maxFailedLogins: config.AUTH_MAX_FAILED_LOGINS,
+      lockoutDurationMs: config.AUTH_LOCKOUT_DURATION_MS,
+    },
   );
 
   const server = new ApolloServer<AppContext>({
@@ -61,7 +73,30 @@ export async function createApp(
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
-  app.use(helmet({ contentSecurityPolicy: config.NODE_ENV === 'production' }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+        },
+      },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+      xFrameOptions: { action: 'deny' },
+    }),
+  );
 
   const corsOriginValue = config.CORS_ORIGIN.toLowerCase();
   const corsOrigin =
@@ -69,6 +104,14 @@ export async function createApp(
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  app.get('/.well-known/security.txt', (_req, res) => {
+    res.type('text/plain');
+    res.send(securityTxt());
+  });
+  app.get('/security.txt', (_req, res) => {
+    res.redirect('/.well-known/security.txt');
   });
 
   const authRateLimit = rateLimit({
@@ -93,7 +136,14 @@ export async function createApp(
         const user = await authService.verifyToken(
           extractBearerToken(req.headers.authorization),
         );
-        return { logger, rssService, loaders, user: user ?? undefined };
+        return {
+          logger,
+          rssService,
+          loaders,
+          user: user ?? undefined,
+          ip: getClientIp(req),
+          userAgent: req.headers['user-agent'],
+        };
       },
     }),
   );
@@ -112,6 +162,17 @@ function extractBearerToken(header?: string | string[]): string {
   return match?.groups?.token ?? '';
 }
 
+function getClientIp(req: express.Request): string | undefined {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (Array.isArray(forwarded)) {
+    return forwarded[0]?.split(',')[0]?.trim();
+  }
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0]?.trim();
+  }
+  return req.ip ?? req.socket.remoteAddress ?? undefined;
+}
+
 interface GraphqlRequestBody {
   query?: string;
 }
@@ -121,6 +182,18 @@ function isAuthMutation(req: express.Request): boolean {
   if (!body) return false;
   if (Array.isArray(body)) return body.some(isSingleAuthMutation);
   return isSingleAuthMutation(body);
+}
+
+function securityTxt(): string {
+  return [
+    'Contact: mailto:security@example.com',
+    'Expires: 2027-12-31T00:00:00.000Z',
+    'Acknowledgments: /security-acknowledgments',
+    'Policy: /security-policy',
+    '',
+    '# This is a sample security.txt for ISO 27017 readiness.',
+    '# Replace the contact and policy URLs with real values before production.',
+  ].join('\n');
 }
 
 function isSingleAuthMutation(body: GraphqlRequestBody): boolean {

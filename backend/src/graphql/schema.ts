@@ -92,6 +92,24 @@ export const typeDefs = /* GraphQL */ `
     password: String!
   }
 
+  type AuditLog {
+    id: ID!
+    action: String!
+    actorId: ID
+    actorEmail: String
+    targetId: ID
+    targetType: String
+    ip: String
+    userAgent: String
+    metadata: String
+    createdAt: DateTime!
+  }
+
+  type UserDataExport {
+    user: User!
+    auditLogs: [AuditLog!]!
+  }
+
   type Query {
     feeds(limit: Int, offset: Int): [Feed!]!
     feed(id: ID!): Feed
@@ -99,6 +117,7 @@ export const typeDefs = /* GraphQL */ `
     article(id: ID!): Article
     stats: Stats!
     me: User
+    auditLogs(limit: Int, offset: Int): [AuditLog!]!
   }
 
   type Mutation {
@@ -111,5 +130,7 @@ export const typeDefs = /* GraphQL */ `
     deleteArticle(id: ID!): Boolean!
     register(input: RegisterInput!): AuthPayload!
     login(input: LoginInput!): AuthPayload!
+    exportMyData: UserDataExport!
+    deleteMyAccount: Boolean!
   }
 `;

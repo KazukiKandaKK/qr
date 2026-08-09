@@ -37,7 +37,7 @@ describe('GraphQL resolvers', () => {
     const authService = new AuthService(userRepo, 'test-secret', '1h');
     adminUser = await authService.register({
       email: 'admin@example.com',
-      password: 'password123',
+      password: 'Password123',
       name: 'Admin',
     });
   });

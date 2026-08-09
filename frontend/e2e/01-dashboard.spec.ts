@@ -33,7 +33,7 @@ test.describe('RSS Security Dashboard', () => {
 
   test.beforeAll(async ({ request }) => {
     const email = 'e2e-admin@example.com';
-    const password = 'password123';
+    const password = 'Password123';
     const register = await request.post('/graphql', {
       data: {
         query: `

@@ -9,6 +9,12 @@ export interface User {
   updatedAt: Date;
 }
 
+export interface UserWithCredentials extends User {
+  passwordHash: string;
+  failedLoginAttempts: number;
+  lockedUntil: Date | null;
+}
+
 export interface AuthPayload {
   token: string;
   user: User;
@@ -23,4 +29,9 @@ export interface RegisterInput {
 export interface LoginInput {
   email: string;
   password: string;
+}
+
+export interface RequestMeta {
+  ip?: string;
+  userAgent?: string;
 }
