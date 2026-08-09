@@ -2,9 +2,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ApolloServer } from '@apollo/server';
 import { typeDefs } from '../../graphql/schema';
-import { createRssResolvers } from './resolvers';
+import { createRssResolvers, type RssContext } from './resolvers';
 import { RssService } from './service';
 import { InMemoryRssRepository } from './repository';
+import { createRssLoaders, type RssLoaders } from './loaders';
 import { InMemoryUserRepository } from '../auth/repository';
 import { AuthService } from '../auth/service';
 import { type User } from '../auth/domain';
@@ -16,14 +17,16 @@ interface ExecutionResponse {
 }
 
 describe('GraphQL resolvers', () => {
-  let server: ApolloServer;
+  let server: ApolloServer<RssContext>;
   let service: RssService;
   let repo: InMemoryRssRepository;
+  let loaders: RssLoaders;
   let adminUser: User;
 
   beforeEach(async () => {
     repo = new InMemoryRssRepository();
     service = new RssService(repo, pino({ level: 'silent' }));
+    loaders = createRssLoaders(repo);
     server = new ApolloServer({
       typeDefs,
       resolvers: createRssResolvers(service),
@@ -34,7 +37,7 @@ describe('GraphQL resolvers', () => {
     const authService = new AuthService(userRepo, 'test-secret', '1h');
     adminUser = await authService.register({
       email: 'admin@example.com',
-      password: 'password123',
+      password: 'Password123',
       name: 'Admin',
     });
   });
@@ -46,7 +49,10 @@ describe('GraphQL resolvers', () => {
   const execute = async (
     query: string,
     variables?: Record<string, unknown>,
-    contextValue: { user?: User } = { user: adminUser },
+    contextValue: Partial<RssContext> & { loaders: RssLoaders } = {
+      user: adminUser,
+      loaders,
+    },
   ): Promise<ExecutionResponse> => {
     const result = await server.executeOperation(
       { query, variables },
@@ -90,7 +96,7 @@ describe('GraphQL resolvers', () => {
       }
     `,
       {},
-      { user: undefined },
+      { user: undefined, loaders },
     );
     expect(result.errors).toBeDefined();
     expect(result.errors?.[0].message).toBe('Unauthorized');
@@ -133,7 +139,7 @@ describe('GraphQL resolvers', () => {
       }
     `,
       { id: feedId },
-      { user: normalUser },
+      { user: normalUser, loaders },
     );
     expect(deleteFeedResult.errors?.[0].message).toBe('Forbidden');
 
@@ -144,7 +150,7 @@ describe('GraphQL resolvers', () => {
       }
     `,
       { id: article.id },
-      { user: normalUser },
+      { user: normalUser, loaders },
     );
     expect(deleteArticleResult.errors?.[0].message).toBe('Forbidden');
   });
@@ -449,7 +455,7 @@ describe('GraphQL resolvers', () => {
       },
     ];
     const fetchService = new RssService(repo, pino({ level: 'silent' }), fakeFetcher);
-    const fetchServer = new ApolloServer({
+    const fetchServer = new ApolloServer<RssContext>({
       typeDefs,
       resolvers: createRssResolvers(fetchService),
     });
@@ -463,7 +469,7 @@ describe('GraphQL resolvers', () => {
           }
         `,
       },
-      { contextValue: { user: adminUser } },
+      { contextValue: { user: adminUser, loaders } },
     );
 
     if (result.body.kind !== 'single') {

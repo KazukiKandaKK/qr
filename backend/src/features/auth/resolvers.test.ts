@@ -52,7 +52,7 @@ describe('Auth GraphQL resolvers', () => {
   it('registers a user and returns a token', async () => {
     const result = await execute(`
       mutation {
-        register(input: { email: "test@example.com", password: "password123" }) {
+        register(input: { email: "test@example.com", password: "Password123" }) {
           token
           user { id email role }
         }
@@ -67,11 +67,11 @@ describe('Auth GraphQL resolvers', () => {
   it('logs in an existing user', async () => {
     await authService.register({
       email: 'test@example.com',
-      password: 'password123',
+      password: 'Password123',
     });
     const result = await execute(`
       mutation {
-        login(input: { email: "test@example.com", password: "password123" }) {
+        login(input: { email: "test@example.com", password: "Password123" }) {
           token
           user { email role }
         }
@@ -84,7 +84,7 @@ describe('Auth GraphQL resolvers', () => {
   it('rejects login with invalid credentials', async () => {
     const result = await execute(`
       mutation {
-        login(input: { email: "unknown@example.com", password: "password123" }) {
+        login(input: { email: "unknown@example.com", password: "Password123" }) {
           token
         }
       }
@@ -97,7 +97,7 @@ describe('Auth GraphQL resolvers', () => {
   it('returns the current user from me', async () => {
     const user = await authService.register({
       email: 'test@example.com',
-      password: 'password123',
+      password: 'Password123',
     });
     const result = await execute(
       `query { me { id email role } }`,

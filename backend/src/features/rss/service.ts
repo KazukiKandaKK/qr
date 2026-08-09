@@ -6,11 +6,13 @@ import {
   UpdateFeedInput,
   ArticleFilter,
   Stats,
+  PaginationArgs,
 } from './domain';
 import {
   createFeedSchema,
   updateFeedSchema,
   articleFilterSchema,
+  paginationSchema,
 } from './schemas';
 import { RssRepository } from './repository';
 import { parseFeed, ParsedArticle } from '../../lib/rssParser';
@@ -32,9 +34,10 @@ export class RssService {
     ) => Promise<ParsedArticle[]> = parseFeed,
   ) {}
 
-  listFeeds(): Promise<Feed[]> {
+  listFeeds(pagination?: PaginationArgs): Promise<Feed[]> {
     this.logger.debug('listing feeds');
-    return this.repository.findFeeds();
+    const page = pagination ? paginationSchema.parse(pagination) : undefined;
+    return this.repository.findFeeds(page);
   }
 
   getStats(): Promise<Stats> {
@@ -70,10 +73,14 @@ export class RssService {
     return this.repository.deleteFeed(id);
   }
 
-  listArticles(filter: ArticleFilter = {}): Promise<Article[]> {
+  listArticles(
+    filter: ArticleFilter = {},
+    pagination?: PaginationArgs,
+  ): Promise<Article[]> {
     const validated = articleFilterSchema.parse(filter);
-    this.logger.debug({ filter: validated }, 'listing articles');
-    return this.repository.findArticles(validated);
+    const page = pagination ? paginationSchema.parse(pagination) : undefined;
+    this.logger.debug({ filter: validated, pagination: page }, 'listing articles');
+    return this.repository.findArticles(validated, page);
   }
 
   getArticle(id: string): Promise<Article | null> {
@@ -98,59 +105,64 @@ export class RssService {
 
   async fetchFeeds(): Promise<FetchResult[]> {
     const feeds = await this.repository.findEnabledFeeds();
-    const results: FetchResult[] = [];
 
-    for (const feed of feeds) {
-      const base: FetchResult = {
-        feedName: feed.name,
-        feedUrl: feed.url,
-        inserted: 0,
-        updated: 0,
-      };
+    return Promise.all(
+      feeds.map(async (feed) => {
+        const base: FetchResult = {
+          feedName: feed.name,
+          feedUrl: feed.url,
+          inserted: 0,
+          updated: 0,
+        };
 
-      try {
-        const items = await this.fetchFeedFn(feed.url);
-        const now = new Date();
+        try {
+          const items = await this.fetchFeedFn(feed.url);
+          const now = new Date();
 
-        for (const item of items) {
-          const existing = await this.repository.findArticleByFeedIdAndLink(
-            feed.id,
-            item.link,
+          const existingArticles =
+            await this.repository.findArticlesByFeedIdAndLinks(
+              feed.id,
+              items.map((item) => item.link),
+            );
+          const existingByLink = new Map(
+            existingArticles.map((article) => [article.link, article]),
           );
 
-          if (existing) {
-            await this.repository.updateArticle(existing.id, {
-              title: item.title,
-              snippet: item.snippet,
-              publishedAt: item.publishedAt,
-              fetchedAt: now,
-            });
-            base.updated += 1;
-          } else {
-            await this.repository.createArticle({
-              feedId: feed.id,
-              title: item.title,
-              link: item.link,
-              snippet: item.snippet,
-              publishedAt: item.publishedAt,
-              fetchedAt: now,
-              isRead: false,
-              isStarred: false,
-            });
-            base.inserted += 1;
+          for (const item of items) {
+            const existing = existingByLink.get(item.link);
+
+            if (existing) {
+              await this.repository.updateArticle(existing.id, {
+                title: item.title,
+                snippet: item.snippet,
+                publishedAt: item.publishedAt,
+                fetchedAt: now,
+              });
+              base.updated += 1;
+            } else {
+              await this.repository.createArticle({
+                feedId: feed.id,
+                title: item.title,
+                link: item.link,
+                snippet: item.snippet,
+                publishedAt: item.publishedAt,
+                fetchedAt: now,
+                isRead: false,
+                isStarred: false,
+              });
+              base.inserted += 1;
+            }
           }
+
+          await this.repository.updateFeedLastFetched(feed.id, now);
+          this.logger.info(base, 'fetched feed');
+          return base;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.logger.error({ feed: feed.url, error: message }, 'fetch failed');
+          return { ...base, error: message };
         }
-
-        await this.repository.updateFeedLastFetched(feed.id, now);
-        results.push(base);
-        this.logger.info(base, 'fetched feed');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        results.push({ ...base, error: message });
-        this.logger.error({ feed: feed.url, error: message }, 'fetch failed');
-      }
-    }
-
-    return results;
+      }),
+    );
   }
 }

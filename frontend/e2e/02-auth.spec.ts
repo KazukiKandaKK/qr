@@ -39,7 +39,7 @@ test.describe('Authentication', () => {
       .click();
 
     await page.getByPlaceholder('Email').fill(email);
-    await page.getByPlaceholder('Password').fill('password123');
+    await page.getByPlaceholder('Password').fill('Password123');
     await page.getByRole('button', { name: 'Register' }).click();
 
     await expect(page.getByRole('heading', { name: 'Feeds' })).toBeVisible();
@@ -65,7 +65,7 @@ test.describe('Authentication', () => {
       .click();
 
     await page.getByPlaceholder('Email').fill(email);
-    await page.getByPlaceholder('Password').fill('password123');
+    await page.getByPlaceholder('Password').fill('Password123');
     await page.getByRole('button', { name: 'Register' }).click();
 
     await expect(page.getByRole('heading', { name: 'Feeds' })).toBeVisible();
@@ -78,7 +78,7 @@ test.describe('Authentication', () => {
     const result = await graphqlLogin(
       request,
       'missing@example.com',
-      'password123',
+      'Password123',
     );
     expect(result.errors?.[0]?.message).toContain('Invalid email or password');
   });

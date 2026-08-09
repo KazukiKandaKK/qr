@@ -8,13 +8,32 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String?
-  passwordHash String
-  role         String   @default("USER")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String?
+  passwordHash        String
+  role                String    @default("USER")
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  actorId    String?
+  actorEmail String?
+  targetId   String?
+  targetType String?
+  ip         String?
+  userAgent  String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([actorId])
+  @@index([actorEmail])
 }
 
 model Feed {
@@ -27,6 +46,9 @@ model Feed {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   articles      Article[]
+
+  @@index([enabled])
+  @@index([createdAt])
 }
 
 model Article {
@@ -42,4 +64,8 @@ model Article {
   isStarred   Boolean  @default(false)
 
   @@unique([feedId, link])
+  @@index([feedId, publishedAt])
+  @@index([publishedAt])
+  @@index([isRead])
+  @@index([isStarred])
 }

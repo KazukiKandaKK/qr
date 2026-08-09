@@ -1,21 +1,42 @@
 import bcrypt from 'bcryptjs';
 import jwt, { type SignOptions } from 'jsonwebtoken';
-import { User, AuthPayload, Role } from './domain';
-import { UserRepository } from './repository';
+import { User, AuthPayload, Role, RequestMeta } from './domain';
+import {
+  UserRepository,
+  AuditLogRepository,
+  AuditLogEntry,
+  InMemoryAuditLogRepository,
+} from './repository';
 import { registerInputSchema, loginInputSchema } from './schemas';
+import { paginationSchema } from '../rss/schemas';
+
+export interface AuthServiceOptions {
+  auditLogRepository?: AuditLogRepository;
+  maxFailedLogins?: number;
+  lockoutDurationMs?: number;
+}
 
 export class AuthService {
+  private readonly auditLogRepository: AuditLogRepository;
+  private readonly maxFailedLogins: number;
+  private readonly lockoutDurationMs: number;
+
   constructor(
     private readonly userRepository: UserRepository,
     private readonly jwtSecret: string,
     private readonly jwtExpiresIn: string,
-  ) {}
+    options: AuthServiceOptions = {},
+  ) {
+    this.auditLogRepository =
+      options.auditLogRepository ?? new InMemoryAuditLogRepository();
+    this.maxFailedLogins = options.maxFailedLogins ?? 5;
+    this.lockoutDurationMs = options.lockoutDurationMs ?? 15 * 60 * 1000;
+  }
 
-  async register(input: {
-    email: string;
-    password: string;
-    name?: string;
-  }): Promise<User> {
+  async register(
+    input: { email: string; password: string; name?: string },
+    requestMeta?: RequestMeta,
+  ): Promise<User> {
     const validated = registerInputSchema.parse(input);
 
     const existing = await this.userRepository.findByEmail(validated.email);
@@ -27,30 +48,141 @@ export class AuthService {
     const userCount = await this.userRepository.count();
     const role: Role = userCount === 0 ? 'ADMIN' : 'USER';
 
-    return this.userRepository.create({
+    const user = await this.userRepository.create({
       email: validated.email,
       name: validated.name,
       passwordHash,
       role,
     });
+
+    await this.auditLogRepository.create({
+      action: 'REGISTER',
+      actorId: user.id,
+      actorEmail: user.email,
+      ip: requestMeta?.ip,
+      userAgent: requestMeta?.userAgent,
+    });
+
+    return user;
   }
 
-  async login(input: { email: string; password: string }): Promise<AuthPayload> {
+  async login(
+    input: { email: string; password: string },
+    requestMeta?: RequestMeta,
+  ): Promise<AuthPayload> {
     const validated = loginInputSchema.parse(input);
 
-    const user = await this.userRepository.findByEmailWithHash(
+    const userWithHash = await this.userRepository.findByEmailWithHash(
       validated.email,
     );
-    if (!user) {
+    const now = Date.now();
+
+    const commonAuditFields = {
+      ip: requestMeta?.ip,
+      userAgent: requestMeta?.userAgent,
+    };
+
+    if (!userWithHash) {
+      await this.auditLogRepository.create({
+        action: 'LOGIN_FAILURE',
+        actorEmail: validated.email,
+        ...commonAuditFields,
+        metadata: { reason: 'UNKNOWN_EMAIL' },
+      });
       throw new Error('Invalid email or password');
     }
 
-    const valid = await bcrypt.compare(validated.password, user.passwordHash);
+    if (userWithHash.lockedUntil) {
+      if (userWithHash.lockedUntil.getTime() > now) {
+        await this.auditLogRepository.create({
+          action: 'LOGIN_FAILURE',
+          actorId: userWithHash.id,
+          actorEmail: userWithHash.email,
+          ...commonAuditFields,
+          metadata: {
+            reason: 'ACCOUNT_LOCKED',
+            lockedUntil: userWithHash.lockedUntil.toISOString(),
+          },
+        });
+        throw new Error(
+          'Account temporarily locked due to too many failed login attempts',
+        );
+      }
+
+      await this.userRepository.updateFailedLoginAttempts(
+        userWithHash.id,
+        0,
+        null,
+      );
+      userWithHash.failedLoginAttempts = 0;
+      userWithHash.lockedUntil = null;
+    }
+
+    const valid = await bcrypt.compare(
+      validated.password,
+      userWithHash.passwordHash,
+    );
     if (!valid) {
+      const attempts = userWithHash.failedLoginAttempts + 1;
+      const shouldLock = attempts >= this.maxFailedLogins;
+      const lockedUntil = shouldLock
+        ? new Date(now + this.lockoutDurationMs)
+        : null;
+
+      await this.userRepository.updateFailedLoginAttempts(
+        userWithHash.id,
+        attempts,
+        lockedUntil,
+      );
+
+      await this.auditLogRepository.create({
+        action: 'LOGIN_FAILURE',
+        actorId: userWithHash.id,
+        actorEmail: userWithHash.email,
+        ...commonAuditFields,
+        metadata: {
+          reason: 'INVALID_PASSWORD',
+          attempts,
+          lockedUntil: lockedUntil?.toISOString(),
+        },
+      });
+
+      if (shouldLock) {
+        await this.auditLogRepository.create({
+          action: 'ACCOUNT_LOCKED',
+          actorId: userWithHash.id,
+          actorEmail: userWithHash.email,
+          ...commonAuditFields,
+          metadata: {
+            attempts,
+            lockedUntil: lockedUntil!.toISOString(),
+          },
+        });
+      }
+
       throw new Error('Invalid email or password');
     }
 
-    const { passwordHash: _, ...publicUser } = user;
+    await this.userRepository.updateFailedLoginAttempts(
+      userWithHash.id,
+      0,
+      null,
+    );
+
+    await this.auditLogRepository.create({
+      action: 'LOGIN_SUCCESS',
+      actorId: userWithHash.id,
+      actorEmail: userWithHash.email,
+      ...commonAuditFields,
+    });
+
+    const {
+      passwordHash: _,
+      failedLoginAttempts: __,
+      lockedUntil: ___,
+      ...publicUser
+    } = userWithHash;
+
     return {
       token: this.issueToken(publicUser),
       user: publicUser,
@@ -74,5 +206,55 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  async exportMyData(
+    userId: string,
+  ): Promise<{ user: User; auditLogs: AuditLogEntry[] }> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    const auditLogs = await this.auditLogRepository.findByActorId(
+      userId,
+      100,
+      0,
+    );
+    return { user, auditLogs };
+  }
+
+  async deleteMyAccount(
+    userId: string,
+    requestMeta?: RequestMeta,
+  ): Promise<void> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    await this.auditLogRepository.create({
+      action: 'ACCOUNT_DELETION',
+      actorId: user.id,
+      actorEmail: user.email,
+      ip: requestMeta?.ip,
+      userAgent: requestMeta?.userAgent,
+    });
+
+    await this.auditLogRepository.deleteByActorId(userId);
+    await this.userRepository.delete(userId);
+  }
+
+  async listAuditLogs(
+    requestingUser: User,
+    args: { limit?: number; offset?: number },
+  ): Promise<AuditLogEntry[]> {
+    if (requestingUser.role !== 'ADMIN') {
+      throw new Error('Forbidden');
+    }
+    const pagination = paginationSchema.parse(args);
+    return this.auditLogRepository.findRecent(
+      pagination.limit ?? 100,
+      pagination.offset,
+    );
   }
 }

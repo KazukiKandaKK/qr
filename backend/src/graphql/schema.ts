@@ -10,7 +10,7 @@ export const typeDefs = /* GraphQL */ `
     lastFetchedAt: DateTime
     createdAt: DateTime!
     updatedAt: DateTime!
-    articles(filter: ArticleFilterInput): [Article!]!
+    articles(filter: ArticleFilterInput, limit: Int, offset: Int): [Article!]!
   }
 
   type Article {
@@ -92,13 +92,32 @@ export const typeDefs = /* GraphQL */ `
     password: String!
   }
 
+  type AuditLog {
+    id: ID!
+    action: String!
+    actorId: ID
+    actorEmail: String
+    targetId: ID
+    targetType: String
+    ip: String
+    userAgent: String
+    metadata: String
+    createdAt: DateTime!
+  }
+
+  type UserDataExport {
+    user: User!
+    auditLogs: [AuditLog!]!
+  }
+
   type Query {
-    feeds: [Feed!]!
+    feeds(limit: Int, offset: Int): [Feed!]!
     feed(id: ID!): Feed
-    articles(filter: ArticleFilterInput): [Article!]!
+    articles(filter: ArticleFilterInput, limit: Int, offset: Int): [Article!]!
     article(id: ID!): Article
     stats: Stats!
     me: User
+    auditLogs(limit: Int, offset: Int): [AuditLog!]!
   }
 
   type Mutation {
@@ -111,5 +130,7 @@ export const typeDefs = /* GraphQL */ `
     deleteArticle(id: ID!): Boolean!
     register(input: RegisterInput!): AuthPayload!
     login(input: LoginInput!): AuthPayload!
+    exportMyData: UserDataExport!
+    deleteMyAccount: Boolean!
   }
 `;

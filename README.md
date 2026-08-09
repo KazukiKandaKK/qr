@@ -78,6 +78,7 @@ npm run dev
 | `npm run fetch` | 有効なフィードを取得して記事を保存 |
 | `npm run db:migrate` | マイグレーション作成・適用 |
 | `npm run db:deploy` | CI/本番でマイグレーション適用 |
+| `npm run db:backup` | SQLite DB のファイルコピーを `backups/` に作成 |
 
 ## GraphQL 例
 
@@ -195,9 +196,25 @@ docker compose up --build -d
 - **RSS 取得**: `rss-parser` でフィードを取得し、記事本文ではなくタイトル・リンク・スニペットのみを保存します（著作権対応）。
 - **更新保護**: 既存記事の再取得時に `isRead` / `isStarred` のフラグは失われません。
 
+## セキュリティ・ISO 27017 対応
+
+本番運用を想定し、以下の技術的管理策を実装しています。
+
+- **認証・認可**: JWT + bcrypt、役割ベースアクセス制御（`ADMIN` / `USER`）
+- **パスワードポリシー**: 8 文字以上、大文字・小文字・数字を必須
+- **アカウントロックアウト**: 連続ログイン失敗で一時ロック（回数・期間は env で設定）
+- **監査ログ**: 認証イベントを `AuditLog` に記録、admin 専用 `auditLogs` クエリで閲覧
+- **データのエクスポート・削除**: ユーザーは自分のデータを `exportMyData` で取得、`deleteMyAccount` で削除
+- **通信・ヘッダー**: Helmet による CSP、HSTS、X-Frame-Options 等のセキュリティヘッダー
+- **脆弱性管理**: GitHub Actions で `npm audit` を実行
+- **バックアップ**: `npm run db:backup` で SQLite DB を `backups/` にコピー
+- **脆弱性開示**: `/.well-known/security.txt` を提供
+
+ISO 27017 はクラウドサービスに関する運用面・契約面の管理策も含みます。上記はコードレベルで実装できる制御の例です。完全なコンプライアンスには、クラウドプロバイダとの共有責任モデル、インシデント対応、鍵管理、データ所在地等の文書化・運用プロセスが必要です。
+
 ## 今後の拡張例
 
-- 認証・認可（context にユーザー情報を注入）
-- DataLoader による N+1 対策
-- 記事検索・フィルタ・ページネーションの強化
+- 多要素認証（TOTP）
 - 定期 RSS 取得（GitHub Actions / BullMQ / node-cron）
+- 通知・アラート機能
+- フィード・記事のタグ付けと全文検索
