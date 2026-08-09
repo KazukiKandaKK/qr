@@ -62,12 +62,43 @@ export const typeDefs = /* GraphQL */ `
     starredCount: Int!
   }
 
+  enum Role {
+    ADMIN
+    USER
+  }
+
+  type User {
+    id: ID!
+    email: String!
+    name: String
+    role: Role!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  type AuthPayload {
+    token: String!
+    user: User!
+  }
+
+  input RegisterInput {
+    email: String!
+    password: String!
+    name: String
+  }
+
+  input LoginInput {
+    email: String!
+    password: String!
+  }
+
   type Query {
     feeds: [Feed!]!
     feed(id: ID!): Feed
     articles(filter: ArticleFilterInput): [Article!]!
     article(id: ID!): Article
     stats: Stats!
+    me: User
   }
 
   type Mutation {
@@ -78,5 +109,7 @@ export const typeDefs = /* GraphQL */ `
     markArticleRead(id: ID!, isRead: Boolean!): Article!
     markArticleStarred(id: ID!, isStarred: Boolean!): Article!
     deleteArticle(id: ID!): Boolean!
+    register(input: RegisterInput!): AuthPayload!
+    login(input: LoginInput!): AuthPayload!
   }
 `;

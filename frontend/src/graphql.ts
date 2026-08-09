@@ -87,3 +87,40 @@ export const GET_STATS = gql`
     }
   }
 `
+
+export const ME = gql`
+  query Me {
+    me {
+      id
+      email
+      name
+      role
+    }
+  }
+`
+
+export const LOGIN = gql`
+  mutation Login($input: LoginInput!) {
+    login(input: $input) {
+      token
+      user {
+        id
+        email
+        role
+      }
+    }
+  }
+`
+
+export const REGISTER = gql`
+  mutation Register($input: RegisterInput!) {
+    register(input: $input) {
+      token
+      user {
+        id
+        email
+        role
+      }
+    }
+  }
+`
