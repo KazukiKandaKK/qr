@@ -48,3 +48,8 @@ export interface Stats {
   unreadCount: number;
   starredCount: number;
 }
+
+export interface PaginationArgs {
+  limit?: number;
+  offset?: number;
+}

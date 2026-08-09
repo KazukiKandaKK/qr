@@ -11,6 +11,7 @@ import { typeDefs } from './graphql/schema';
 import { createRssResolvers } from './features/rss/resolvers';
 import { RssService } from './features/rss/service';
 import { PrismaRssRepository, RssRepository } from './features/rss/repository';
+import { createRssLoaders, type RssLoaders } from './features/rss/loaders';
 import { PrismaUserRepository, UserRepository } from './features/auth/repository';
 import { AuthService } from './features/auth/service';
 import { createAuthResolvers } from './features/auth/resolvers';
@@ -23,6 +24,7 @@ import type pino from 'pino';
 export interface AppContext {
   logger: pino.Logger;
   rssService: RssService;
+  loaders: RssLoaders;
   user?: User;
 }
 
@@ -37,6 +39,7 @@ export async function createApp(
   const repository = options.repository ?? new PrismaRssRepository(prisma);
   const userRepository = options.userRepository ?? new PrismaUserRepository(prisma);
   const rssService = new RssService(repository, logger);
+  const loaders = createRssLoaders(repository);
   const authService = new AuthService(
     userRepository,
     config.JWT_SECRET,
@@ -90,7 +93,7 @@ export async function createApp(
         const user = await authService.verifyToken(
           extractBearerToken(req.headers.authorization),
         );
-        return { logger, rssService, user: user ?? undefined };
+        return { logger, rssService, loaders, user: user ?? undefined };
       },
     }),
   );

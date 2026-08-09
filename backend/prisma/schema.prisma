@@ -27,6 +27,9 @@ model Feed {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   articles      Article[]
+
+  @@index([enabled])
+  @@index([createdAt])
 }
 
 model Article {
@@ -42,4 +45,8 @@ model Article {
   isStarred   Boolean  @default(false)
 
   @@unique([feedId, link])
+  @@index([feedId, publishedAt])
+  @@index([publishedAt])
+  @@index([isRead])
+  @@index([isStarred])
 }

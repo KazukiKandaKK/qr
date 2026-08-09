@@ -1,29 +1,51 @@
 import { RssService } from './service';
 import { dateTimeScalar } from '../../graphql/scalars';
 import { requireAuth, requireAdmin, type AuthContext } from '../auth/guards';
+import type { RssLoaders } from './loaders';
+import { paginationSchema } from './schemas';
+
+export interface RssContext extends AuthContext {
+  loaders: RssLoaders;
+}
 
 export const createRssResolvers = (service: RssService) => ({
   DateTime: dateTimeScalar,
   Feed: {
     articles: (
       feed: { id: string },
-      args: { filter?: { keyword?: string; isRead?: boolean; isStarred?: boolean } },
-      ctx: AuthContext,
+      args: {
+        filter?: { keyword?: string; isRead?: boolean; isStarred?: boolean };
+        limit?: number;
+        offset?: number;
+      },
+      ctx: RssContext,
     ) => {
       requireAuth(ctx);
-      return service.listArticles({ feedId: feed.id, ...args.filter });
+      const pagination =
+        args.limit !== undefined || args.offset !== undefined
+          ? paginationSchema.parse({ limit: args.limit, offset: args.offset })
+          : undefined;
+      return ctx.loaders.articlesByFeedId.load({
+        feedId: feed.id,
+        filter: args.filter,
+        pagination,
+      });
     },
   },
   Article: {
-    feed: (article: { feedId: string }, _args: unknown, ctx: AuthContext) => {
+    feed: (article: { feedId: string }, _args: unknown, ctx: RssContext) => {
       requireAuth(ctx);
-      return service.getFeed(article.feedId);
+      return ctx.loaders.feedById.load(article.feedId);
     },
   },
   Query: {
-    feeds: (_: unknown, __: unknown, ctx: AuthContext) => {
+    feeds: (_: unknown, args: { limit?: number; offset?: number }, ctx: AuthContext) => {
       requireAuth(ctx);
-      return service.listFeeds();
+      const pagination =
+        args.limit !== undefined || args.offset !== undefined
+          ? paginationSchema.parse({ limit: args.limit, offset: args.offset })
+          : undefined;
+      return service.listFeeds(pagination);
     },
     feed: (_: unknown, args: { id: string }, ctx: AuthContext) => {
       requireAuth(ctx);
@@ -31,11 +53,15 @@ export const createRssResolvers = (service: RssService) => ({
     },
     articles: (
       _: unknown,
-      args: { filter?: object },
+      args: { filter?: object; limit?: number; offset?: number },
       ctx: AuthContext,
     ) => {
       requireAuth(ctx);
-      return service.listArticles(args.filter);
+      const pagination =
+        args.limit !== undefined || args.offset !== undefined
+          ? paginationSchema.parse({ limit: args.limit, offset: args.offset })
+          : undefined;
+      return service.listArticles(args.filter, pagination);
     },
     article: (_: unknown, args: { id: string }, ctx: AuthContext) => {
       requireAuth(ctx);

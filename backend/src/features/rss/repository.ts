@@ -6,11 +6,13 @@ import {
   UpdateFeedInput,
   ArticleFilter,
   Stats,
+  PaginationArgs,
 } from './domain';
 
 export interface RssRepository {
   // feeds
-  findFeeds(): Promise<Feed[]>;
+  findFeeds(pagination?: PaginationArgs): Promise<Feed[]>;
+  findFeedsByIds(ids: readonly string[]): Promise<Feed[]>;
   findFeedById(id: string): Promise<Feed | null>;
   findFeedByUrl(url: string): Promise<Feed | null>;
   findEnabledFeeds(): Promise<Feed[]>;
@@ -20,16 +22,49 @@ export interface RssRepository {
   updateFeedLastFetched(id: string, at: Date): Promise<void>;
 
   // articles
-  findArticles(filter: ArticleFilter): Promise<Article[]>;
+  findArticles(
+    filter: ArticleFilter,
+    pagination?: PaginationArgs,
+  ): Promise<Article[]>;
+  findArticlesByFeedIds(
+    feedIds: readonly string[],
+    filter?: ArticleFilter,
+  ): Promise<Article[]>;
   findArticleById(id: string): Promise<Article | null>;
   findArticleByFeedIdAndLink(feedId: string, link: string): Promise<Article | null>;
-  findArticlesByFeedId(feedId: string): Promise<Article[]>;
+  findArticlesByFeedIdAndLinks(
+    feedId: string,
+    links: readonly string[],
+  ): Promise<Article[]>;
+  findArticlesByFeedId(
+    feedId: string,
+    pagination?: PaginationArgs,
+  ): Promise<Article[]>;
   createArticle(data: Omit<Article, 'id'>): Promise<Article>;
   updateArticle(id: string, data: Partial<Article>): Promise<Article>;
   deleteArticle(id: string): Promise<boolean>;
 
   // stats
   getStats(): Promise<Stats>;
+}
+
+function applyPagination(
+  args: { take?: number; skip?: number },
+  pagination?: PaginationArgs,
+) {
+  if (!pagination) return;
+  if (pagination.limit !== undefined) args.take = pagination.limit;
+  if (pagination.offset !== undefined) args.skip = pagination.offset;
+}
+
+function applyInMemoryPagination<T>(
+  rows: T[],
+  pagination?: PaginationArgs,
+): T[] {
+  if (!pagination) return rows;
+  const offset = pagination.offset ?? 0;
+  const limit = pagination.limit ?? rows.length;
+  return rows.slice(offset, offset + limit);
 }
 
 function toFeed(row: {
@@ -62,9 +97,18 @@ function toArticle(row: {
 export class PrismaRssRepository implements RssRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async findFeeds(): Promise<Feed[]> {
-    const rows = await this.prisma.feed.findMany({
+  async findFeeds(pagination?: PaginationArgs): Promise<Feed[]> {
+    const args: { orderBy: { createdAt: 'desc' }; take?: number; skip?: number } = {
       orderBy: { createdAt: 'desc' },
+    };
+    applyPagination(args, pagination);
+    const rows = await this.prisma.feed.findMany(args);
+    return rows.map(toFeed);
+  }
+
+  async findFeedsByIds(ids: readonly string[]): Promise<Feed[]> {
+    const rows = await this.prisma.feed.findMany({
+      where: { id: { in: [...ids] } },
     });
     return rows.map(toFeed);
   }
@@ -113,7 +157,10 @@ export class PrismaRssRepository implements RssRepository {
     });
   }
 
-  async findArticles(filter: ArticleFilter): Promise<Article[]> {
+  async findArticles(
+    filter: ArticleFilter,
+    pagination?: PaginationArgs,
+  ): Promise<Article[]> {
     const where: {
       feedId?: string;
       isRead?: boolean;
@@ -124,6 +171,44 @@ export class PrismaRssRepository implements RssRepository {
     } = {};
 
     if (filter.feedId) where.feedId = filter.feedId;
+    if (filter.isRead !== undefined) where.isRead = filter.isRead;
+    if (filter.isStarred !== undefined) where.isStarred = filter.isStarred;
+    if (filter.keyword) {
+      where.OR = [
+        { title: { contains: filter.keyword } },
+        { snippet: { contains: filter.keyword } },
+      ];
+    }
+
+    const args: {
+      where: typeof where;
+      orderBy: { publishedAt: 'desc' };
+      take?: number;
+      skip?: number;
+    } = {
+      where,
+      orderBy: { publishedAt: 'desc' },
+    };
+    applyPagination(args, pagination);
+    const rows = await this.prisma.article.findMany(args);
+    return rows.map(toArticle);
+  }
+
+  async findArticlesByFeedIds(
+    feedIds: readonly string[],
+    filter: ArticleFilter = {},
+  ): Promise<Article[]> {
+    const where: {
+      feedId?: { in: string[] };
+      isRead?: boolean;
+      isStarred?: boolean;
+      OR?: Array<
+        { title?: { contains: string } } | { snippet?: { contains: string } }
+      >;
+    } = {
+      feedId: { in: [...feedIds] },
+    };
+
     if (filter.isRead !== undefined) where.isRead = filter.isRead;
     if (filter.isStarred !== undefined) where.isStarred = filter.isStarred;
     if (filter.keyword) {
@@ -155,12 +240,21 @@ export class PrismaRssRepository implements RssRepository {
     return row ? toArticle(row) : null;
   }
 
-  async findArticlesByFeedId(feedId: string): Promise<Article[]> {
+  async findArticlesByFeedIdAndLinks(
+    feedId: string,
+    links: readonly string[],
+  ): Promise<Article[]> {
     const rows = await this.prisma.article.findMany({
-      where: { feedId },
-      orderBy: { publishedAt: 'desc' },
+      where: { feedId, link: { in: [...links] } },
     });
     return rows.map(toArticle);
+  }
+
+  async findArticlesByFeedId(
+    feedId: string,
+    pagination?: PaginationArgs,
+  ): Promise<Article[]> {
+    return this.findArticles({ feedId }, pagination);
   }
 
   async createArticle(
@@ -223,10 +317,19 @@ export class InMemoryRssRepository implements RssRepository {
     return `article-${this.articleIdSeq}`;
   }
 
-  async findFeeds(): Promise<Feed[]> {
-    return Array.from(this.feeds.values()).sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  async findFeeds(pagination?: PaginationArgs): Promise<Feed[]> {
+    return applyInMemoryPagination(
+      Array.from(this.feeds.values()).sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      ),
+      pagination,
     );
+  }
+
+  async findFeedsByIds(ids: readonly string[]): Promise<Feed[]> {
+    return ids
+      .map((id) => this.feeds.get(id))
+      .filter((feed): feed is Feed => feed !== undefined);
   }
 
   async findFeedById(id: string): Promise<Feed | null> {
@@ -292,7 +395,10 @@ export class InMemoryRssRepository implements RssRepository {
     }
   }
 
-  async findArticles(filter: ArticleFilter): Promise<Article[]> {
+  async findArticles(
+    filter: ArticleFilter,
+    pagination?: PaginationArgs,
+  ): Promise<Article[]> {
     let rows = Array.from(this.articles.values());
     if (filter.feedId) {
       rows = rows.filter((a) => a.feedId === filter.feedId);
@@ -311,9 +417,19 @@ export class InMemoryRssRepository implements RssRepository {
           a.snippet.toLowerCase().includes(kw),
       );
     }
-    return rows.sort(
-      (a, b) => b.publishedAt.getTime() - a.publishedAt.getTime(),
+    return applyInMemoryPagination(
+      rows.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime()),
+      pagination,
     );
+  }
+
+  async findArticlesByFeedIds(
+    feedIds: readonly string[],
+    filter: ArticleFilter = {},
+  ): Promise<Article[]> {
+    const feedIdSet = new Set(feedIds);
+    const rows = await this.findArticles({ ...filter, feedId: undefined });
+    return rows.filter((a) => feedIdSet.has(a.feedId));
   }
 
   async findArticleById(id: string): Promise<Article | null> {
@@ -331,10 +447,21 @@ export class InMemoryRssRepository implements RssRepository {
     );
   }
 
-  async findArticlesByFeedId(feedId: string): Promise<Article[]> {
-    return (await this.findArticles({ feedId })).sort(
-      (a, b) => b.publishedAt.getTime() - a.publishedAt.getTime(),
+  async findArticlesByFeedIdAndLinks(
+    feedId: string,
+    links: readonly string[],
+  ): Promise<Article[]> {
+    const linkSet = new Set(links);
+    return Array.from(this.articles.values()).filter(
+      (a) => a.feedId === feedId && linkSet.has(a.link),
     );
+  }
+
+  async findArticlesByFeedId(
+    feedId: string,
+    pagination?: PaginationArgs,
+  ): Promise<Article[]> {
+    return this.findArticles({ feedId }, pagination);
   }
 
   async createArticle(data: Omit<Article, 'id'>): Promise<Article> {

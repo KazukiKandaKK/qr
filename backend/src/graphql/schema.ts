@@ -10,7 +10,7 @@ export const typeDefs = /* GraphQL */ `
     lastFetchedAt: DateTime
     createdAt: DateTime!
     updatedAt: DateTime!
-    articles(filter: ArticleFilterInput): [Article!]!
+    articles(filter: ArticleFilterInput, limit: Int, offset: Int): [Article!]!
   }
 
   type Article {
@@ -93,9 +93,9 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type Query {
-    feeds: [Feed!]!
+    feeds(limit: Int, offset: Int): [Feed!]!
     feed(id: ID!): Feed
-    articles(filter: ArticleFilterInput): [Article!]!
+    articles(filter: ArticleFilterInput, limit: Int, offset: Int): [Article!]!
     article(id: ID!): Article
     stats: Stats!
     me: User
