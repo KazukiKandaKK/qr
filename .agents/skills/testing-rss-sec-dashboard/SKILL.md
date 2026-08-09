@@ -79,6 +79,15 @@ npx playwright test e2e/<spec>.spec.ts --project=chromium --headed
 
 `App.tsx` uses `fetchPolicy: 'network-only'` for the `ME` query and awaits `client.clearStore()` on login and logout. This prevents the dashboard from briefly rendering a previous user's cached `me` data after logout and registering a new user.
 
+## Account lockout, password complexity, and audit logging notes
+
+PR #12 adds password complexity, account lockout, and audit logging. To verify these end-to-end:
+
+- Passwords must be 8-128 characters and contain at least one uppercase letter, one lowercase letter, and one number. Try registering with `password123` and confirm the UI shows the complexity error, then register with `Password123` and reach the dashboard.
+- `AuthService` tracks `failedLoginAttempts`/`lockedUntil`. After `AUTH_MAX_FAILED_LOGINS` (default 5) failed logins, a valid login returns `Account temporarily locked due to too many failed login attempts`.
+- To test lockout in a headed run: log out, enter the wrong password 5 times, then submit the correct password and expect the lockout message.
+- Audit events (`REGISTER`, `LOGIN_SUCCESS`, `LOGIN_FAILURE`, `ACCOUNT_LOCKED`) are written transparently to `AuditLog`; there is no UI yet, so verify that registration/login/dashboard flows do not crash.
+
 ## Recommended verification order
 
 1. `npm run build` in both `backend/` and `frontend/`.
@@ -88,3 +97,4 @@ npx playwright test e2e/<spec>.spec.ts --project=chromium --headed
 5. Add feed, fetch, mark read/star, observe stats update.
 6. Logout, register a non-admin user, confirm no `Delete` button, and that `deleteArticle` GraphQL mutation returns `FORBIDDEN`.
 7. Run `npx playwright test` and confirm all chromium + mobile chrome tests pass.
+8. If testing security-lockout changes, additionally verify password-complexity rejection and the account lockout flow as described above.
