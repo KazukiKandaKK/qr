@@ -189,6 +189,30 @@ docker compose up --build -d
 
 > **Note**: Prisma の SQLite 相対パスは `schema.prisma` からの相対パスとして解決されるため、`file:./data/dev.db` のような相対指定だと `prisma/` 配下に作成されてしまいボリュームに永続化されません。そのため `DATABASE_URL` には絶対パスを使用しています。
 
+## ログ収集（Filebeat + Kafka）
+
+`docker-compose.logging.yml` で Filebeat + ZooKeeper + Kafka を起動し、アプリログを Kafka トピック `rss-logs` に流せます。
+
+```bash
+# app + logging スタックを一括起動
+JWT_SECRET=your-jwt-secret docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.logging.yml \
+  up --build -d
+
+# Kafka トピックからログを確認
+docker exec rss-sec-dashboard-kafka \
+  kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic rss-logs \
+  --from-beginning \
+  --max-messages 10
+```
+
+- バックエンドは `LOG_FILE` が設定されている場合、標準出力に加えてファイルにもログを出力します（Docker では `/app/backend/logs/app.log`）。
+- `filebeat/filebeat.yml` で `/var/log/app/*.log` を読み取り、NDJSON をパースして `output.kafka` へ送信します。
+- ローカル開発時は `LOG_FILE` を未設定にすれば、引き続き標準出力のみにログが出ます。
+
 ## 設計のポイント
 
 - **ドメイン分離**: `domain.ts` に型を定義し、Prisma 実装は `repository.ts` で閉じ込めています。
