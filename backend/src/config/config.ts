@@ -15,6 +15,7 @@ const schema = z.object({
   LOG_LEVEL: z
     .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal'])
     .default('info'),
+  LOG_FILE: z.string().optional(),
   JWT_SECRET: z.string().min(1).default(DEFAULT_JWT_SECRET),
   JWT_EXPIRES_IN: z.string().default('7d'),
   CORS_ORIGIN: z.string().default('*'),

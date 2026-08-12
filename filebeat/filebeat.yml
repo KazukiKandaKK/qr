@@ -1,0 +1,28 @@
+filebeat.inputs:
+  - type: filestream
+    id: rss-sec-dashboard-logs
+    enabled: true
+    paths:
+      - /var/log/app/*.log
+    parsers:
+      - ndjson:
+          target: ""
+          add_error_key: true
+    fields:
+      service: rss-sec-dashboard
+    fields_under_root: true
+
+output.kafka:
+  enabled: true
+  hosts: ["kafka:9092"]
+  topic: "rss-logs"
+  partition.round_robin:
+    reachable_only: false
+  required_acks: 1
+  compression: gzip
+  max_message_bytes: 1000000
+
+filebeat.logging:
+  level: info
+  to_files: false
+  to_stderr: true
