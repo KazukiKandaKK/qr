@@ -1,49 +1,43 @@
 # syntax=docker/dockerfile:1
 
-FROM node:20-slim AS builder
-
-WORKDIR /app
-
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
-
-COPY backend/package*.json ./backend/
-RUN cd backend && npm ci
-
-COPY backend/prisma ./backend/prisma
-COPY backend/tsconfig.json ./backend/
-COPY backend/src ./backend/src
-
-RUN cd backend && npm run build
-
-COPY frontend/package*.json ./frontend/
-COPY frontend/vite.config.ts ./frontend/
-COPY frontend/tsconfig*.json ./frontend/
-COPY frontend/index.html ./frontend/
-COPY frontend/src ./frontend/src
-
-RUN cd frontend && npm ci && npm run build
-
-FROM node:20-slim
-
-WORKDIR /app
-
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
-
-ENV NODE_ENV=production
-ENV DATABASE_URL="file:/app/backend/data/dev.db"
-
-COPY backend/package*.json ./backend/
-COPY backend/prisma ./backend/prisma
-
-RUN cd backend && npm ci --omit=dev && npx prisma generate
-
-COPY --from=builder /app/backend/dist ./backend/dist
-COPY --from=builder /app/frontend/dist ./frontend/dist
-
-RUN mkdir -p /app/backend/data
+FROM golang:1.25-alpine AS go-builder
 
 WORKDIR /app/backend
 
+RUN apk add --no-cache build-base
+
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+COPY backend/ ./
+RUN CGO_ENABLED=1 GOOS=linux go build -o server ./cmd/server
+
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /app/frontend
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+FROM golang:1.25-alpine
+
+WORKDIR /app/backend
+
+RUN apk add --no-cache ca-certificates
+
+ENV NODE_ENV=production
+ENV DATABASE_URL="file:/app/backend/data/dev.db"
+ENV LOG_FILE="/app/backend/logs/app.log"
+ENV FRONTEND_DIST="/app/frontend/dist"
+
+COPY --from=go-builder /app/backend/server ./server
+COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+
+RUN mkdir -p /app/backend/data /app/backend/logs
+
 EXPOSE 4000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["./server"]

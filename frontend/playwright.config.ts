@@ -14,10 +14,10 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: `cd ../backend && rm -f prisma/dev.db && DATABASE_URL=${databaseUrl} npx prisma migrate deploy && DATABASE_URL=${databaseUrl} npm run build && cd ../frontend && npm run build && cd ../backend && RATE_LIMIT_DISABLED=true DATABASE_URL=${databaseUrl} npm start`,
+    command: `export PATH=$PATH:$HOME/.local/go/bin && cd ../backend && go build ./... && cd ../frontend && npm run build && cd ../backend && rm -f dev.db && RATE_LIMIT_DISABLED=true DATABASE_URL=${databaseUrl} go run ./cmd/server`,
     url: 'http://localhost:4000/health',
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
+    timeout: 180 * 1000,
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },

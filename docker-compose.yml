@@ -6,8 +6,8 @@ services:
       NODE_ENV: production
       PORT: 4000
       DATABASE_URL: "file:/app/backend/data/dev.db"
-      LOG_LEVEL: info
       LOG_FILE: "/app/backend/logs/app.log"
+      FRONTEND_DIST: "/app/frontend/dist"
       CORS_ORIGIN: "false"
       JWT_SECRET: ${JWT_SECRET:?Please set JWT_SECRET in your environment or .env file}
     ports:
