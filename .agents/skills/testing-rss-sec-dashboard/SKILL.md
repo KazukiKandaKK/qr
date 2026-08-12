@@ -76,16 +76,21 @@ npx playwright test e2e/<spec>.spec.ts --project=chromium --headed
 
 `App.tsx` uses `fetchPolicy: 'network-only'` for the `ME` query and awaits `client.clearStore()` on login and logout. This prevents the dashboard from briefly rendering a previous user's cached `me` data after logout and registering a new user.
 
-## Pagination notes
+## Pagination and fetch performance notes
 
-`feeds`, `articles`, and `Feed.articles` accept optional `limit`/`offset` arguments. Use them in raw GraphQL queries to test pagination:
+`feeds`, `articles`, and `Feed.articles` accept optional `limit`/`offset` arguments. `fetchFeeds` polls enabled feeds concurrently and upserts articles without overwriting user flags. To verify these end-to-end:
 
-```graphql
-query {
-  feeds(limit: 1, offset: 0) { name }
-  articles(filter: { keyword: "..." }, limit: 1, offset: 0) { title }
-}
-```
+- Start **two** local RSS servers on different ports (or use a single server with two distinct feed XML files).
+- Add both feeds, click `Fetch feeds`, and confirm the result summary shows both feeds updated in one batch.
+- Confirm the article list shows each article with the **correct feed name**.
+- Apply the keyword filter and verify only matching articles are shown; clear it and verify the full list returns.
+- Send raw GraphQL queries via `curl` to test `limit`/`offset` on `feeds`, `articles`, and `Feed.articles`:
+  ```graphql
+  query {
+    feeds(limit: 1, offset: 0) { name }
+    articles(filter: { keyword: "..." }, limit: 1, offset: 0) { title }
+  }
+  ```
 
 ## Account lockout, password complexity, and audit logging notes
 
@@ -114,6 +119,17 @@ ls test-results/*/*.png
 ```
 
 In GitHub Actions, the `e2e` job uploads `frontend/test-results/` as the `e2e-screenshots` artifact.
+
+## Manual regression checklist
+
+1. `cd backend && go build ./...` and `cd frontend && npm run build`.
+2. Start backend (`RATE_LIMIT_DISABLED=true go run ./cmd/server`) and local RSS fixture(s).
+3. Open `http://localhost:4000/` and register the first admin.
+4. Add one or more feeds, click `Fetch feeds`, mark read/star, and observe stats update.
+5. Logout, register a non-admin user, confirm no `Delete` button, and that `deleteArticle` GraphQL mutation returns `FORBIDDEN`.
+6. Run `npx playwright test` and confirm all chromium + mobile chrome tests pass.
+7. If testing performance changes, verify multi-feed fetch and GraphQL pagination as described above.
+8. If testing security-lockout changes, additionally verify password-complexity rejection and the account lockout flow as described above.
 
 ## DI / Clean Architecture notes
 
