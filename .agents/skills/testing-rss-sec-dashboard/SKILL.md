@@ -79,6 +79,22 @@ npx playwright test e2e/<spec>.spec.ts --project=chromium --headed
 
 `App.tsx` uses `fetchPolicy: 'network-only'` for the `ME` query and awaits `client.clearStore()` on login and logout. This prevents the dashboard from briefly rendering a previous user's cached `me` data after logout and registering a new user.
 
+## Performance / N+1 regression notes
+
+PR #10 and later performance work adds `dataloader`, optional `limit`/`offset` pagination on `feeds`/`articles`/`Feed.articles`, and parallel `fetchFeeds`. To verify these end-to-end:
+
+- Start **two** local RSS servers on different ports (or use a single server with two distinct feed XML files).
+- Add both feeds, click `Fetch feeds`, and confirm the result summary shows both feeds updated in one batch.
+- Confirm the article list shows each article with the **correct feed name** (this exercises the `Article.feed` DataLoader).
+- Apply the keyword filter and verify only matching articles are shown; clear it and verify the full list returns.
+- Send raw GraphQL queries via `request` or `curl` to test `limit`/`offset` on `feeds`, `articles`, and `Feed.articles`:
+  ```graphql
+  query {
+    feeds(limit: 1, offset: 0) { name }
+    articles(filter: { keyword: "..." }, limit: 1, offset: 0) { title }
+  }
+  ```
+
 ## Account lockout, password complexity, and audit logging notes
 
 PR #12 adds password complexity, account lockout, and audit logging. To verify these end-to-end:
@@ -107,17 +123,6 @@ ls test-results/*/*.png
 
 In GitHub Actions, the `e2e` job uploads `frontend/test-results/` as the `e2e-screenshots` artifact.
 
-## Recommended verification order
-
-1. `npm run build` in both `backend/` and `frontend/`.
-2. `npx prisma migrate deploy` in `backend/` with a fresh `dev.db`.
-3. Start backend (`npm start`) and local RSS fixture.
-4. Open `http://localhost:4000/` and register the first admin.
-5. Add feed, fetch, mark read/star, observe stats update.
-6. Logout, register a non-admin user, confirm no `Delete` button, and that `deleteArticle` GraphQL mutation returns `FORBIDDEN`.
-7. Run `npx playwright test` and confirm all chromium + mobile chrome tests pass.
-8. If testing security-lockout changes, additionally verify password-complexity rejection and the account lockout flow as described above.
-
 ## DI container / awilix regression notes
 
 PR #17 introduces awilix DI wiring in `backend/src/lib/container.ts` and consumes it from `backend/src/app.ts`.
@@ -126,3 +131,15 @@ PR #17 introduces awilix DI wiring in `backend/src/lib/container.ts` and consume
 - `app.ts` resolves `rssService`, `authService`, and `repository` from the container instead of constructing them with `new`.
 - `CreateAppOptions` still supports repository overrides, so backend integration tests and `app.test.ts` continue to inject in-memory repositories unchanged.
 - No frontend or manual setup changes are needed; the standard build/test commands (`npm run build`, `npm run test`, `npx playwright test`) remain sufficient.
+
+## Recommended verification order
+
+1. `npm run build` in both `backend/` and `frontend/`.
+2. `npx prisma migrate deploy` in `backend/` with a fresh `dev.db`.
+3. Start backend (`npm start`) and local RSS fixture(s).
+4. Open `http://localhost:4000/` and register the first admin.
+5. Add one or more feeds, fetch, mark read/star, observe stats update.
+6. Logout, register a non-admin user, confirm no `Delete` button, and that `deleteArticle` GraphQL mutation returns `FORBIDDEN`.
+7. Run `npx playwright test` and confirm all chromium + mobile chrome tests pass.
+8. If testing performance changes, verify multi-feed fetch and GraphQL pagination as described above.
+9. If testing security-lockout changes, additionally verify password-complexity rejection and the account lockout flow as described above.
