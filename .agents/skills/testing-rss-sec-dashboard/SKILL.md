@@ -88,6 +88,25 @@ PR #12 adds password complexity, account lockout, and audit logging. To verify t
 - To test lockout in a headed run: log out, enter the wrong password 5 times, then submit the correct password and expect the lockout message.
 - Audit events (`REGISTER`, `LOGIN_SUCCESS`, `LOGIN_FAILURE`, `ACCOUNT_LOCKED`) are written transparently to `AuditLog`; there is no UI yet, so verify that registration/login/dashboard flows do not crash.
 
+## Screenshot golden-path test
+
+PR #18 adds a reusable Playwright POM and a screenshot spec (`frontend/e2e/03-screenshots.spec.ts`) that captures the key UI states of the admin flow:
+
+- `frontend/e2e/pom/DashboardPage.ts` — reusable page object for login, feed/article actions, and screenshots.
+- `frontend/e2e/helpers/auth.ts` — `ensureAdminUser()` obtains a fixed admin token by registering or logging in.
+- `frontend/e2e/helpers/rssServer.ts` — `startLocalRssServer()` spawns a tiny RSS fixture for deterministic article fetching.
+- `frontend/e2e/03-screenshots.spec.ts` — runs the golden path and saves `01-login.png` through `08-logout.png` under `frontend/test-results/`.
+
+To run locally:
+
+```bash
+cd /home/ubuntu/repos/qr/frontend
+npx playwright test e2e/03-screenshots.spec.ts
+ls test-results/*/*.png
+```
+
+In GitHub Actions, the `e2e` job uploads `frontend/test-results/` as the `e2e-screenshots` artifact.
+
 ## Recommended verification order
 
 1. `npm run build` in both `backend/` and `frontend/`.
@@ -98,3 +117,12 @@ PR #12 adds password complexity, account lockout, and audit logging. To verify t
 6. Logout, register a non-admin user, confirm no `Delete` button, and that `deleteArticle` GraphQL mutation returns `FORBIDDEN`.
 7. Run `npx playwright test` and confirm all chromium + mobile chrome tests pass.
 8. If testing security-lockout changes, additionally verify password-complexity rejection and the account lockout flow as described above.
+
+## DI container / awilix regression notes
+
+PR #17 introduces awilix DI wiring in `backend/src/lib/container.ts` and consumes it from `backend/src/app.ts`.
+
+- `createAppContainer(options)` registers `repository`, `userRepository`, `auditLogRepository`, `rssService`, `authService`, plus shared values (`prisma`, `logger`, `jwtSecret`, `jwtExpiresIn`, `fetchFeedFn`).
+- `app.ts` resolves `rssService`, `authService`, and `repository` from the container instead of constructing them with `new`.
+- `CreateAppOptions` still supports repository overrides, so backend integration tests and `app.test.ts` continue to inject in-memory repositories unchanged.
+- No frontend or manual setup changes are needed; the standard build/test commands (`npm run build`, `npm run test`, `npx playwright test`) remain sufficient.
