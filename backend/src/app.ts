@@ -10,19 +10,12 @@ import depthLimit from 'graphql-depth-limit';
 import { typeDefs } from './graphql/schema';
 import { createRssResolvers } from './features/rss/resolvers';
 import { RssService } from './features/rss/service';
-import { PrismaRssRepository, RssRepository } from './features/rss/repository';
 import { createRssLoaders, type RssLoaders } from './features/rss/loaders';
-import {
-  PrismaUserRepository,
-  UserRepository,
-  PrismaAuditLogRepository,
-  AuditLogRepository,
-} from './features/auth/repository';
 import { AuthService } from './features/auth/service';
 import { createAuthResolvers } from './features/auth/resolvers';
 import { AuthContext } from './features/auth/guards';
-import { prisma } from './lib/prisma';
 import { config } from './config/config';
+import { createAppContainer, ContainerOverrides } from './lib/container';
 import { logger } from './config/logger';
 import type pino from 'pino';
 
@@ -32,31 +25,15 @@ export interface AppContext extends AuthContext {
   loaders: RssLoaders;
 }
 
-export interface CreateAppOptions {
-  repository?: RssRepository;
-  userRepository?: UserRepository;
-  auditLogRepository?: AuditLogRepository;
-}
+export type CreateAppOptions = ContainerOverrides;
 
 export async function createApp(
   options: CreateAppOptions = {},
 ): Promise<express.Express> {
-  const repository = options.repository ?? new PrismaRssRepository(prisma);
-  const userRepository = options.userRepository ?? new PrismaUserRepository(prisma);
-  const auditLogRepository =
-    options.auditLogRepository ?? new PrismaAuditLogRepository(prisma);
-  const rssService = new RssService(repository, logger);
-  const loaders = createRssLoaders(repository);
-  const authService = new AuthService(
-    userRepository,
-    config.JWT_SECRET,
-    config.JWT_EXPIRES_IN,
-    {
-      auditLogRepository,
-      maxFailedLogins: config.AUTH_MAX_FAILED_LOGINS,
-      lockoutDurationMs: config.AUTH_LOCKOUT_DURATION_MS,
-    },
-  );
+  const container = createAppContainer(options);
+  const rssService = container.cradle.rssService;
+  const authService = container.cradle.authService;
+  const loaders = createRssLoaders(container.cradle.repository);
 
   const server = new ApolloServer<AppContext>({
     typeDefs,

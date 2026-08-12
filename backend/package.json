@@ -26,6 +26,7 @@
     "@apollo/server": "^5.5.1",
     "@as-integrations/express4": "^1.1.2",
     "@prisma/client": "^5.17.0",
+    "awilix": "^13.0.5",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dataloader": "^2.2.3",
